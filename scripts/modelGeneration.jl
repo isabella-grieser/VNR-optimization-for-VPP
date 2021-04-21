@@ -26,12 +26,11 @@ end
 """
 generateElecEdges(nodes , edge_scale = length(nodes)*5)
 
-generates all electrical network edges with given nodes; 
-more or less the amount of edges given in the edge_scale attribute
+generates all electrical network edges with given nodes and with more or less the amount of edges given in the edge_scale attribute
 """
 function generateElecEdges(nodes, edge_scale = length(nodes)*5)
-    #use the simple generation algorithm described in Hines et al.
-    #essential, each node gets edges to all avg_edges nearest nodes and, with a given probability, one more edge
+    #use the simple minium distance generation algorithm described in Hines et al.
+    #essentially, each node gets edges to all avg_edges nearest nodes and, with a given probability, one more edge
     elec_edges = ElecEdge[]
     avg_edges = Int32(floor(edge_scale/length(nodes)))
     #probability that an extra edge is generated
@@ -42,8 +41,9 @@ function generateElecEdges(nodes, edge_scale = length(nodes)*5)
     end
     for n in nodes
         #create an average number of edges for each node +1 for the stochastic creation
-        link_nodes = getNNearestNodes(n,nodes,avg_edges+1)        
-        for i in link_nodes 
+        link_nodes = getNNearestNodes(n,nodes,avg_edges+1)  
+        #the last node is not used for the edge generation       
+        for i in Iterators.take(link_nodes,avg_edges) 
           push!(elec_edges, ElecEdge(n,i))
         end
         #then create an additional link with a probability p=edges/nodes-floor(edges/nodes)    
@@ -63,13 +63,14 @@ function getNNearestNodes(node, nodes, n)
   sort!(pair_nodes; alg=Sort.PartialQuickSort(n))
   #now get the nodes back :(
   return_nodes = Node[]
-  for i in [0:n+1]
-    #somehow I cant iterate directly though the vector
-    #TODO: iterate directly 
-    push!(return_nodes, pair_nodes[i].b)
+  j = 1
+  #somehow I cant iterate directly though the vector; but with Iterators.take it somehow works (helps against bound errors)
+  for i in Iterators.take(pair_nodes,n)
+    push!(return_nodes, i.b)
   end
   return return_nodes
 end
+
 """
 generateComEdges(nodes)
 
@@ -89,14 +90,13 @@ function generateNetwork(nodes , elec_edges, com_edges)
   return Network(nodes, elec_edges, com_edges)
 end
 
-
-
 "helper structure to find the nearest node combination"
 struct Pair{T<:Node}
   a::T
   b::T
 end
 
+"necessary to find pairs with the minimum distance"
 function Base.:isless(x::Pair,y::Pair)
     return (x.a.x-x.b.x)^2+(x.a.y-x.b.y)^2 <= (y.a.x-y.b.x)^2+(y.a.y-y.b.y)^2
 end
