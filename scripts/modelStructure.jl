@@ -3,29 +3,52 @@
 #I only define this for circulary dependencies
 abstract type Edge
 end
+
+#abstract node
+
+#I differentiate the different nodes by this enum; I cant do this by struct since julia has no instanceof check :(
+#pro: I can add new node types easier
+@enum Nodetype begin
+    #the root node of the electrical distribution network
+    feeder
+    #a substation for the electrical distribution network
+    substation
+    #the gateway. The root node of the communication network
+    gateway 
+    #a mobile communication tower
+    tower
+    #a power generating agent in a network that has specific coordinates
+    der
+    #the load
+    load
+end
 #structs for network generation
-"a power generating agent in a network that has specific coordinates"
-mutable struct Node{T<:Int64,V<:Float16,U<:Edge}
+mutable struct Node{P<:Nodetype,T<:Int64,V<:Float16,U<:Edge}
+    type::P
+    id::T
     x::T
     y::T
     power::T
     reliability::V
+    #do I even need the computing power?
     #comp_power::T
-    id::T
     elec_edges::Vector{U}
     com_edges::Vector{U}
 end
-"a power distribution connection between two power generaing nodes"
-struct ElecEdge{T<:Node}<:Edge#,V<:Int32}
+"an electrical connection between two nodes"
+struct ElecEdge{T<:Node, V<:Float64}<:Edge
     from::T
     to::T
+    cost::V
     #capacity::V
 end
 "a connection between two computing nodes"
-struct ComEdge{T<:Node,V<:Int32}<:Edge
+struct ComEdge{T<:Node,V<:Float64}<:Edge
     from::T
     to::T
-    bandwidth::V
+    cost::V
+    #do I need the bandwidth
+    #bandwidth::V
 end
 "the general electrical distribution network"
 struct Network{T<:Node,V<:ElecEdge,Z<:ComEdge}
