@@ -19,6 +19,8 @@ end
     tower
     #a power generating agent in a network that has specific coordinates
     der
+    #the vpp management office
+    management
     #the load
     load
 end

@@ -15,7 +15,7 @@ generates the electrical distribution and communication network based on a radia
 with the given node and cluster amount; the individual cluster sizes can also be given as an array
 """
 function generateNetwork(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_param2 = 2, cost_param3 = 1, size_array = [], 
-  radius_1 = 30, radius_2 = 5, power_avg = 80, power_sd = 10, reliability_avg = .70, reliability_sd = .10)
+  radius_1 = 20, radius_2 = 5, power_avg = 80, power_sd = 10, reliability_avg = .70, reliability_sd = .10)
 
   elec_edges = ElecEdge[]
   com_edges = ComEdge[]
@@ -91,6 +91,21 @@ function generateNetwork(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_p
   end
   #electrical network is finished
 
+  #generate the vpp management office node
+  #just get the first substation
+  sub = second_elec_roots[1]
+  x = calculateCoordinate(sub.x, radius_2, coord_min, coord_max)
+  y = calculateCoordinate(sub.y, radius_2, coord_min, coord_max)
+  mngmt = Node(management, id, x, y, 0, Float16(0), Edge[],  Edge[])
+  push!(nodes, mngmt)
+  push!(leaf_nodes, mngmt)
+  id = id + 1 
+
+  edge =  ElecEdge(mngmt, sub, Float64(cost_param2*calculateLength(mngmt, sub)))
+  push!(mngmt.elec_edges, edge)
+  push!(sub.elec_edges, edge)
+  push!(elec_edges, edge)
+
   #now generate a different set of root nodes for the communication network (with different coordinates)
   com_root = Node(gateway, id,  Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 
               0, Float16(0), Edge[], Edge[])
@@ -115,25 +130,41 @@ function generateNetwork(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_p
 
   #now connect all ders to the nearest towerget the nearest substation
   for n in leaf_nodes
-    tow = min(n, towers, coord_max)
+    tow = min(n, towers)
     #generate the edge between tower and der
     edge = ComEdge(tow, n, Float64(cost_param3))
     push!(tow.com_edges, edge)
     push!(n.com_edges, edge)
-    push!(com_edges, edge)    
+    push!(com_edges, edge)  
+    
+
   end
 
   #if a tower is not connected to any der -> remove it because it is useless 
   for i in towers
-    if !any(n-> n.from.type === der || n.to.type === der, i.com_edges)
+    #less than two edges => i is only connected with the gateway
+    if length(i.com_edges)<2
       #remove the edge from the gateway and the edge array
-      index = findfirst(n->n.from === i || n.to === i, com_root.com_edges)
+      index = findfirst(n->n.from.id == i.id || n.to.id == i.id, com_root.com_edges)
       edge = com_root.com_edges[index]
       deleteat!(com_edges, findfirst(n -> n === edge, com_edges))      
       deleteat!(com_root.com_edges, index)
       #remove the node
-      deleteat!(nodes, findfirst(n -> n===i, nodes))
+      deleteat!(nodes, findfirst(n -> n.id == i.id, nodes))
+      #the id of the com nodes need to be recalculated, else the graph cannot be visualized properly
+      for j in towers
+        if j.id>i.id
+          j.id = j.id - 1
+        end
+      end
     end
+  end
+
+  for i in leaf_nodes
+    #now check if there is really a com edge for each leaf node 
+    if(isempty(i.com_edges))
+      throw(e)
+    end    
   end
 
   return Network(nodes, elec_edges, com_edges) 
@@ -174,12 +205,12 @@ function generateDer(root, power_avg, power_sd, reliability_avg, reliability_sd,
 end
 
 "helper function to find the nearest node"
-function  min(value, array, max_distance)
-  min = max_distance
+function  min(value, array)
+  min = typemax(Int)
   min_node = first(array)
   for i in array
     dist = abs(value.x-i.x) + abs(value.y-i.y)
-    if dist < min 
+    if dist <= min 
       min_node = i
       min = dist
     end
@@ -209,6 +240,8 @@ function visualizeNetwork(network)
       push!(node_labels, "g")
     elseif i.type === tower
       push!(node_labels, "t")
+    elseif i.type === management
+      push!(node_labels, "m")     
     end
   end
   
