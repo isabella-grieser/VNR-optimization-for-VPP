@@ -1,4 +1,3 @@
-
 #abstract edge
 #I only define this for circulary dependencies
 abstract type Edge
@@ -25,7 +24,7 @@ end
     load
 end
 #structs for network generation
-mutable struct Node{P<:Nodetype,T<:Int64,V<:Float16,U<:Edge}
+mutable struct Node{P<:Nodetype,T<:Int64,V<:Float64,U<:Edge}
     type::P
     id::T
     x::T
@@ -34,21 +33,25 @@ mutable struct Node{P<:Nodetype,T<:Int64,V<:Float16,U<:Edge}
     reliability::V
     #do I even need the computing power?
     #comp_power::T
+    cost::V
     elec_edges::Vector{U}
     com_edges::Vector{U}
 end
 "an electrical connection between two nodes"
-struct ElecEdge{T<:Node, V<:Float64}<:Edge
+struct ElecEdge{T<:Node, V<:Float64,U<:Int64}<:Edge
     from::T
     to::T
     cost::V
+    id::U
     #capacity::V
 end
 "a connection between two computing nodes"
-struct ComEdge{T<:Node,V<:Float64}<:Edge
+mutable struct ComEdge{T<:Node,V<:Float64,U<:Int64}<:Edge
     from::T
     to::T
     cost::V
+    id::U
+    reliability::V
     #do I need the bandwidth
     #bandwidth::V
 end
@@ -57,4 +60,9 @@ struct Network{T<:Node,V<:ElecEdge,Z<:ComEdge}
     nodes::Vector{T}    
     elec_edges::Vector{V}
     com_edges::Vector{Z}
+end
+
+struct VNR{T<:Int64,V<:Float64}
+    power::T
+    reliability::V
 end
