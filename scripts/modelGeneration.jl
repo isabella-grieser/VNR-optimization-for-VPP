@@ -26,8 +26,8 @@ with the given node and cluster amount; the individual cluster sizes can also be
 - 'power_avg, power_sd, reliability_avg, reliability_sd' : parameters necessary for DER generation
 - 'reliability_avg_com, reliability_sd_com' : the reliability parameters for the communication network
 """
-function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_param2 = 2, cost_param3 = 1, size_array = [], 
-  radius_1 = 20, radius_2 = 5, power_avg = 80, power_sd = 10, reliability_avg = .70, reliability_sd = .10,
+function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_param3 = 1, size_array = [], 
+  radius_1 = 20, radius_2 = 5, power_avg = 80, power_sd = 10, sd_avg = 20.0, sd_sd = 1.0,
   reliability_avg_com = .80, reliability_sd_com = .10)
 
   elec_edges = ElecEdge[]
@@ -42,14 +42,14 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
   elec_id = 1
   com_id = 1
   #coordinate value range
-  coord_min = 1
+  coord_min = 2
   coord_max = 64
   #first, generate the electrical network; based on that we will later generate the communication network
   #first,generate the root node
 
 
-  root = Node(feeder, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 0, 
-              1.0, 0.0, Edge[], Edge[])
+  root = Node(substation, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 0, 
+              0.0, Edge[], Edge[])
   push!(nodes, root)
   id += 1
 
@@ -63,7 +63,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
     #generate the nodes inside a square (faster/easier to generate than in a circle) with the respective radius_1
     x = calculateCoordinate(root.x, radius_1, coord_min, coord_max)
     y = calculateCoordinate(root.y, radius_1, coord_min, coord_max)
-    sub = Node(substation, id, x, y, 0, 1.0, 0.0, Edge[],  Edge[])
+    sub = Node(feeder, id, x, y, 0, 0.0, Edge[],  Edge[])
     push!(nodes, sub)
     #generate the edge between root and substation
     edge =  ElecEdge(root, sub, Float64(cost_param2*calculateLength(root, sub)), elec_id)
@@ -80,7 +80,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
     for (i,v) in enumerate(size_array)
       node = second_elec_roots[i]  
       for n in 1:v
-        d = generateDer(node, power_avg, power_sd, reliability_avg, reliability_sd, id, radius_2, cost_param1, coord_min, coord_max)  
+        d = generateDer(node, power_avg, power_sd, sd_avg, sd_sd, id, radius_2, coord_min, coord_max)  
         #create the edge
         edge = ElecEdge(node, d, Float64(cost_param2*calculateLength(node, d)), elec_id)
         push!(node.elec_edges, edge)
@@ -97,7 +97,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
     for i in 1:clusters
       node = second_elec_roots[i]     
       for n in 1:node_cluster
-        d = generateDer(node, power_avg, power_sd, reliability_avg, reliability_sd, id, radius_2, cost_param1, coord_min, coord_max)
+        d = generateDer(node, power_avg, power_sd, sd_avg, sd_sd, id, radius_2, coord_min, coord_max)
         #create the edge
         edge = ElecEdge(node, d, Float64(cost_param2*calculateLength(node, d)), elec_id)
         push!(node.elec_edges, edge)
@@ -113,11 +113,11 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
   #electrical network is finished
 
   #generate the vpp management office node
-  #just get the first substation
-  sub = second_elec_roots[1]
-  x = calculateCoordinate(sub.x, radius_2, coord_min, coord_max)
-  y = calculateCoordinate(sub.y, radius_2, coord_min, coord_max)
-  mngmt = Node(management, id, x, y, 0, 1.0, 0.0, Edge[],  Edge[])
+  #the node is fixed at (1,1)
+  x = 1
+  y = 1
+  mngmt = Node(management, id, x, y, 0, 0.0, Edge[],  Edge[])
+  sub = min(mngmt, second_elec_roots)  
   push!(nodes, mngmt)
   push!(leaf_nodes, mngmt)
   id += 1 
@@ -130,7 +130,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
 
   #now generate a different set of root nodes for the communication network (with different coordinates)
   com_root = Node(gateway, id,  Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 
-              0, 1.0, 0.0, Edge[], Edge[])
+              0, 0.0, Edge[], Edge[])
   push!(nodes, com_root)
   id += 1
 
@@ -139,7 +139,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_
   for i in 1:clusters
     x = calculateCoordinate(com_root.x, radius_1, coord_min, coord_max)
     y = calculateCoordinate(com_root.y, radius_1, coord_min, coord_max)
-    tow = Node(tower, id, x, y, 0, 1.0, 0.0, Edge[], Edge[])
+    tow = Node(tower, id, x, y, 0, 0.0, Edge[], Edge[])
     push!(nodes, tow)
     push!(towers, tow)
    #generate the edge between root and tower
@@ -223,20 +223,14 @@ end
 
 
 "helper function which generates the distributed energy resource node"
-function generateDer(root, power_avg, power_sd, reliability_avg, reliability_sd, id, radius, cost_param, coord_min, coord_max)
-
-  #reliability of the node
-  p = Float64(reliability_avg + reliability_sd*randn())
-  while p > 1.0
-    p =  Float64(reliability_avg + reliability_sd*randn())
-  end
-
+function generateDer(root, power_avg, power_sd, sd_avg, sd_sd, id, radius, coord_min, coord_max)
   #generate the nodes inside a square (faster/easier to generate than in a circle) with the respective radius_1
   x = calculateCoordinate(root.x, radius, coord_min, coord_max)
   y = calculateCoordinate(root.y, radius, coord_min, coord_max)  
 
-  power = Int64(round(power_avg + power_sd*randn(Float16)))
-  return Node(der, id, x, y, power , p, Float64(cost_param*power), Edge[], Edge[])
+  power = Int64(round(power_avg - power_sd + 2*power_sd*randn(Float16)))
+  sd = sd_avg - sd_sd + 2*sd_sd*randn(Float16)
+  return Node(der, id, x, y, power , sd,  Edge[], Edge[])
 end
 
 "helper function to find the nearest node"

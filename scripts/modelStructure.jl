@@ -30,10 +30,9 @@ mutable struct Node{P<:Nodetype,T<:Int64,V<:Float64,U<:Edge}
     x::T
     y::T
     power::T
-    reliability::V
+    sd::V
     #do I even need the computing power?
     #comp_power::T
-    cost::V
     elec_edges::Vector{U}
     com_edges::Vector{U}
 end
