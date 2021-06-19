@@ -3,6 +3,7 @@ using JuMP, CPLEX
 include("modelGeneration.jl")
 include("modelStructure.jl")
 include("graphAnalysis.jl")
+include("exampleModel.jl")
 
 #define the average number of nodes in a network cluster
 node_cluster = 2
@@ -26,3 +27,5 @@ print("\n")
 print([(n.id, get_neighboring_com_nodes_id(n)) for n in network.nodes])
 
 #print(create_scenarios(network.nodes, reliabilities))
+
+get_example()

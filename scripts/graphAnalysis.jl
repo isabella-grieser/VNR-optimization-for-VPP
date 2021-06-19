@@ -95,8 +95,8 @@ end
   calculates the power output given a reliability level
 """
 function calculate_power(n, r)
-  a = quantile(Normal(n.power, n.sd), 1.0 - r)
-  return (n.sd > 0) ? quantile(Normal(n.power, n.sd), 1.0 - r) : 0
+  a = quantile(Normal(n.power, n.sd), r)
+  return (n.sd > 0) ? quantile(Normal(n.power, n.sd), r) : 0
 end
 """
 visualize_vnr(network)
