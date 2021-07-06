@@ -56,13 +56,13 @@ function get_neighboring_com_nodes_id(n)
   return [(i.from.id == n.id) ? i.to.id : i.from.id for i in n.com_edges]
 end
 """
-  returns all neighboring nodes connected through the communication network
+  returns all scenario and its probabilities
 """
 function create_scenarios(nodes, reliabilities)
   #first, create the single reliability scenarios for each node
   single_scenarios = []
   for n in nodes
-    if n.power > 0
+    if n.power > 1
       push!(single_scenarios, [(r, calculate_power(n, r)) for r in reliabilities])
     else
       push!(single_scenarios, [(1, 0)])     
@@ -98,6 +98,53 @@ function calculate_power(n, r)
   a = quantile(Normal(n.power, n.sd), r)
   return (n.sd > 0) ? quantile(Normal(n.power, n.sd), r) : 0
 end
+
+"""
+  returns all scenarios and its probabilities minus the scerarios that need to be fulfilled anyway
+"""
+function create_minimum_scenarios(nodes, reliabilities, vnr_reliability)
+  rel = 1 - vnr_reliability
+  #calculate the cartesian product
+  #there should be a more efficient way to calculate all this (because we only need parts of it)
+  #but I dont know how to calculate an n-cartesian efficently given the constraints
+  all_scenarios = create_scenarios(nodes, reliabilities)
+  #this implementation of removing unecessary scenarios is kind of inefficient I guess
+  #sort the list by scenario probabilities
+  sort!(all_scenarios, by=x->x[1])
+  all_essential_scenarios = []
+  #the current scenario probability
+  current_probability = 0
+  #this only says if the cumulative probability is higher than the allowed probability
+  next_is_last = false
+  for i in 1:length(all_scenarios)
+    probability = all_scenarios[i][1]
+    if current_probability == probability
+      #add the scenario to the essential ones 
+      push!(all_essential_scenarios, all_scenarios[i])
+      continue
+    elseif next_is_last == true
+      #if this is the last scenario with a probability that is interesting for us 
+      if current_probability == probability
+        #we want to get all scenarios with the same probability
+        push!(all_essential_scenarios, all_scenarios[i])
+        continue
+      else 
+        #all necessary scenarios were extracted
+        break
+      end
+    else 
+      if probability > rel
+        #else we put the flag that we only want the next elements and then stop
+        next_is_last = true
+      end
+      current_probability = probability
+      push!(all_essential_scenarios, all_scenarios[i])
+    end
+  end
+
+  return all_essential_scenarios
+end
+
 """
 visualize_vnr(network)
 

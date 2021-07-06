@@ -5,27 +5,12 @@ include("modelStructure.jl")
 include("graphAnalysis.jl")
 include("exampleModel.jl")
 
-#define the average number of nodes in a network cluster
-node_cluster = 2
-#define the number of clusters in the network
-cluster_sum = 2
-
-#generate the network containing both the electrical and communication network; 
-#all other values defined in the text are generated with standard values defined in the script
-network = generate_network(node_cluster, cluster_sum)
-#visualize the generated network with the power outputs of the individual nodes
-#where the electrical connections are yellow and the communication lines are red
-visualize_network(network)
-reliabilities = [ 0.4, 0.5, 0.6]
-scenarios = create_scenarios(network.nodes, reliabilities)
-print(scenarios)
-print("\n")
-print(length(scenarios))
-print("\n")
-print([scenarios[1][2][n] for n in 1:length(network.nodes)])
-print("\n")
-print([(n.id, get_neighboring_com_nodes_id(n)) for n in network.nodes])
-
 #print(create_scenarios(network.nodes, reliabilities))
 
-get_example()
+example_network = get_example()
+
+example_vnr1 = VNR(75, 0.95)
+example_reliabilities = [0.1, 0.3, 0.5, 0.7, 0.9]
+links = [[1,2]]
+print([(i, j) for i in 1:length(example_network.nodes) for j in get_neighboring_com_nodes_id(example_network.nodes[i])])
+#create_minimum_scenarios(example_network.nodes, example_reliabilities, example_vnr1.reliability)

@@ -44,11 +44,11 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   #coordinate value range
   coord_min = 2
   coord_max = 64
+  #values for infrastructure nodes
+  infra_node_values = 1
   #first, generate the electrical network; based on that we will later generate the communication network
   #first,generate the root node
-
-
-  root = Node(substation, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 0, 
+  root = Node(substation, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), infra_node_values, 
               0.0, Edge[], Edge[])
   push!(nodes, root)
   id += 1
@@ -63,7 +63,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
     #generate the nodes inside a square (faster/easier to generate than in a circle) with the respective radius_1
     x = calculateCoordinate(root.x, radius_1, coord_min, coord_max)
     y = calculateCoordinate(root.y, radius_1, coord_min, coord_max)
-    sub = Node(feeder, id, x, y, 0, 0.0, Edge[],  Edge[])
+    sub = Node(feeder, id, x, y, infra_node_values, 0.0, Edge[],  Edge[])
     push!(nodes, sub)
     #generate the edge between root and substation
     edge =  ElecEdge(root, sub, Float64(cost_param2*calculateLength(root, sub)), elec_id)
@@ -116,7 +116,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   #the node is fixed at (1,1)
   x = 1
   y = 1
-  mngmt = Node(management, id, x, y, 0, 0.0, Edge[],  Edge[])
+  mngmt = Node(management, id, x, y, infra_node_values, 0.0, Edge[],  Edge[])
   sub = min(mngmt, second_elec_roots)  
   push!(nodes, mngmt)
   push!(leaf_nodes, mngmt)
@@ -130,7 +130,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
 
   #now generate a different set of root nodes for the communication network (with different coordinates)
   com_root = Node(gateway, id,  Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 
-              0, 0.0, Edge[], Edge[])
+                  infra_node_values, 0.0, Edge[], Edge[])
   push!(nodes, com_root)
   id += 1
 
@@ -139,7 +139,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   for i in 1:clusters
     x = calculateCoordinate(com_root.x, radius_1, coord_min, coord_max)
     y = calculateCoordinate(com_root.y, radius_1, coord_min, coord_max)
-    tow = Node(tower, id, x, y, 0, 0.0, Edge[], Edge[])
+    tow = Node(tower, id, x, y, infra_node_values, 0.0, Edge[], Edge[])
     push!(nodes, tow)
     push!(towers, tow)
    #generate the edge between root and tower
