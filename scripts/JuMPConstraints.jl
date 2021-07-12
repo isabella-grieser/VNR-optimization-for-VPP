@@ -4,10 +4,9 @@ include("modelGeneration.jl")
 include("modelStructure.jl")
 include("graphAnalysis.jl")
 
-function calculate_embedding(network, vnr, reliabilities, scenarios = [], show_failures = true)
+function calculate_embedding(network, vnr, reliabilities, scenarios = []; show_failures = true
+    , show_embedding = false)
     model = direct_model(CPLEX.Optimizer())
-    #get the indexes of all ders in the model
-    ders = filter(n -> n.type == der, network.nodes)
     
     #the activation of the nodes, all defined as binary vectors
     #the first x is the vmo node, the second x are the DER nodes
@@ -55,15 +54,15 @@ vnr_nodes = 2
     if isempty(scenarios)  
         scenarios = create_scenarios(network.nodes, reliabilities)
     end
-    #scenario variables 
-    @variable(model,zeta[1:length(scenarios)], binary = true)
+ #scenario variables 
+@variable(model,zeta[1:length(scenario_outputs)], binary = true)
 
-    #scenario node constraint; go over all scenarios and check if the power constraint is solved 
-    @constraint(model, c12[i = 1:length(scenarios)], zeta[i]*vnr.power 
-        + sum(x[2,n]*scenarios[i][2][n] for n in 1:length(network.nodes)) >= vnr.power)
+#scenario node constraint; go over all scenarios and check if the power constraint is solved 
+@constraint(model, c12[i = 1:length(scenario_outputs)], zeta[i]*vnr.power 
+    + sum(x[2,n]*scenario_outputs[i][2][n] for n in 1:length(network.nodes)) >= vnr.power)
 
-    #calculate the reliability
-    @constraint(model, c13, sum(zeta[i]*scenarios[i][1] for i in 1:length(scenarios)) <= 1.0-vnr.reliability)
+#calculate the reliability
+@constraint(model, c13, sum(zeta[i]*scenario_outputs[i][1] for i in 1:length(scenario_outputs)) <= 1.0-vnr.reliability)
 
     #link summary constraint
     @variable(model, y_sum[1:length(network.com_edges)], binary = true) 
@@ -82,15 +81,13 @@ vnr_nodes = 2
     #to remove the annoying optimizer informations
     MOI.set(model, MOI.Silent(), true)
     optimize!(model)
-
-    #get the results of the optimization
-    #objective_value(model)
-    
+        
     if show_failures
         display(value.(zeta))
     end
-#    display(value.(x))
-#    display(c12)
-#    display(c13)
-    visualize_vnr(network, value.(x), value.(y_sum))
+    print(raw_status(model))
+    if show_embedding
+        visualize_vnr(network, value.(x), value.(y_sum))
+    end
+
 end
