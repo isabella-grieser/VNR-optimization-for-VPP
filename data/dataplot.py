@@ -4,7 +4,7 @@ import numpy as np
 sun_path = "produkt_zehn_min_sonne_mannheim.txt"
 wind_path = "produkt_zehn_min_wind_mannheim.txt"
 # format: yyyymmdd
-used_day = "20200709"
+used_day = "20180709"
 # import the data
 sun_data_parsed = [l.split(';') for l in open(sun_path, "r").readlines()]
 wind_data_parsed = [l.split(';') for l in open(wind_path, "r").readlines()]
@@ -36,15 +36,15 @@ print(np.arange(0.0, 1.0, 1.0/len(x_labels)))
 # plot every 30 min
 plt.setp((ax1, ax2), xticks=range(11, len(sun_data), 24))
 
-#ax1.plot(x, [l[1] for l in sun_data])
-#ax1.set_title("sun irradiance")
-#ax2.plot(x, [l[1] for l in wind_data])
-#ax2.set_title("wind speed")
-#plt.setp(ax1, ylabel='sunlight on ground in [J/cm^2]')
-#plt.setp(ax2, ylabel='wind speed in [m/s]')
-#plt.xlabel("time")
-#plt.suptitle("sun irradiance and wind speed in Mannheim at 09/07/2020", fontsize=14)
-#plt.show()
+ax1.plot(x, [l[1] for l in sun_data])
+ax1.set_title("sun irradiance")
+ax2.plot(x, [l[1] for l in wind_data])
+ax2.set_title("wind speed")
+plt.setp(ax1, ylabel='sunlight on ground in [J/cm^2]')
+plt.setp(ax2, ylabel='wind speed in [m/s]')
+plt.xlabel("time")
+plt.suptitle("sun irradiance and wind speed in Mannheim at 09/07/2018", fontsize=14)
+plt.show()
 
 
 #solar panel efficiency
@@ -58,11 +58,12 @@ area = 11309
 #factor
 factor = 10**3
 #now the plots for the average power output
-ax1.plot(x, [l[1]*eff*time/factor for l in sun_data])
-ax1.set_title("solar panel power generation")
-ax2.plot(x, [(rho*area*l[1]**3)/(2*factor) for l in wind_data])
-ax2.set_title("wind turbine power generation")
-plt.setp(ax1, ylabel='average power generation per square meter [kW/m^2]')
-plt.setp(ax2, ylabel='average power generation per unit [kW]')
-plt.xlabel("time")
+#ax1.plot(x, [l[1]*eff*time/factor for l in sun_data])
+#ax1.set_title("solar panel power generation")
+#ax2.plot(x, [(rho*area*l[1]**3)/(2*factor) for l in wind_data])
+#ax2.set_title("wind turbine power generation")
+#plt.setp(ax1, ylabel='average power generation per square meter [kW/m^2]')
+#plt.setp(ax2, ylabel='average power generation per unit [kW]')
+#plt.setp(ax1, xlabel='time')
+#plt.setp(ax2, xlabel='time')
 plt.show()
