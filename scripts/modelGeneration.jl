@@ -3,6 +3,7 @@ using GraphPlot
 using LightGraphs
 using Colors
 using Random
+using Cairo, Compose
 using Base.Sort
 
 include("modelStructure.jl")
@@ -17,18 +18,16 @@ with the given node and cluster amount; the individual cluster sizes can also be
 #arguments
 - 'node_cluster' : number of ders per cluster 
 - 'clusters' : number of clusters
-- 'cost_param1' : cost parameter for the DER nodes
-- 'cost_param2' : cost parameter for the electrical links
-- 'cost_param3' : cost parameter for the communication links
 - 'size_array' : an array with the individual number of nodes per cluster (if clusters with different amount of nodes are desired)
 - 'radius_1' : the max distance between feeder/gateway and substation/tower
 - 'radius_2' : the max distance between substation/tower and DERs
-- 'power_avg, power_sd, reliability_avg, reliability_sd' : parameters necessary for DER generation
+- 'power_avg, power_sd, reliability_avg, reliability_sd' : parameters necessary for DER generation; dependend of der subtype
+- 'der_distribution' : the der subtypes in the model with the given distributions (given as e.g [(solar, 1.0)])  
 - 'reliability_avg_com, reliability_sd_com' : the reliability parameters for the communication network
 """
-function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_param3 = 1, size_array = [], 
-  radius_1 = 20, radius_2 = 5, power_avg = 80, power_sd = 10, sd_avg = 20.0, sd_sd = 1.0,
-  reliability_avg_com = .80, reliability_sd_com = .10)
+function generate_network(clusters = 5, node_cluster = 5; size_array = [], 
+  radius_1 = 20, radius_2 = 5, power_avg = [80], power_sd = [10], der_distribution = [(solar, 1.0)], 
+  sd_avg = 20.0, sd_sd = 1.0, reliability_avg_com = .95, reliability_sd_com = .5)
 
   elec_edges = ElecEdge[]
   com_edges = ComEdge[]
@@ -44,11 +43,11 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   #coordinate value range
   coord_min = 2
   coord_max = 64
-  #values for infrastructure nodes
+  #(tecnical,for the constraint solving) power output values for infrastructure nodes
   infra_node_values = 1
   #first, generate the electrical network; based on that we will later generate the communication network
   #first,generate the root node
-  root = Node(substation, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), infra_node_values, 
+  root = Node(substation, none, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), infra_node_values, 
               0.0, Edge[], Edge[])
   push!(nodes, root)
   id += 1
@@ -61,12 +60,12 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   #create the second level of nodes
   for i in 1:clusters
     #generate the nodes inside a square (faster/easier to generate than in a circle) with the respective radius_1
-    x = calculateCoordinate(root.x, radius_1, coord_min, coord_max)
-    y = calculateCoordinate(root.y, radius_1, coord_min, coord_max)
-    sub = Node(feeder, id, x, y, infra_node_values, 0.0, Edge[],  Edge[])
+    x = calculate_coordinate(root.x, radius_1, coord_min, coord_max)
+    y = calculate_coordinate(root.y, radius_1, coord_min, coord_max)
+    sub = Node(feeder, none, id, x, y, infra_node_values, 0.0, Edge[],  Edge[])
     push!(nodes, sub)
     #generate the edge between root and substation
-    edge =  ElecEdge(root, sub, Float64(cost_param2*calculateLength(root, sub)), elec_id)
+    edge =  ElecEdge(root, sub, elec_id)
     push!(root.elec_edges, edge)
     push!(sub.elec_edges, edge)
     push!(elec_edges, edge)
@@ -75,14 +74,24 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
     elec_id += 1
   end
 
+  current_der_nodes = 0
+  current_type = der_distribution[1]
+  current_distribution = 1
   #create DER if the amount of nodes per cluster is given as an array
   if !isempty(size_array) 
     for (i,v) in enumerate(size_array)
       node = second_elec_roots[i]  
       for n in 1:v
-        d = generateDer(node, power_avg, power_sd, sd_avg, sd_sd, id, radius_2, coord_min, coord_max)  
+        #if all nodes of the current distribution were created -> move to the next der type
+        if current_der_nodes >= current_type[2]*sum(size_array)
+          current_distribution += 1
+          current_type = der_distribution[current_distribution]
+          current_der_nodes = 0
+        end
+        d = generate_der(node, current_type[1], power_avg[current_distribution], power_sd[current_distribution], 
+        sd_avg, sd_sd, id, radius_2, coord_min, coord_max)
         #create the edge
-        edge = ElecEdge(node, d, Float64(cost_param2*calculateLength(node, d)), elec_id)
+        edge = ElecEdge(node, d, elec_id)
         push!(node.elec_edges, edge)
         push!(d.elec_edges, edge)
         push!(elec_edges, edge)
@@ -90,6 +99,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
         push!(nodes, d)
         id += 1
         elec_id += 1
+        current_der_nodes += 1
       end
     end 
   else 
@@ -97,9 +107,16 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
     for i in 1:clusters
       node = second_elec_roots[i]     
       for n in 1:node_cluster
-        d = generateDer(node, power_avg, power_sd, sd_avg, sd_sd, id, radius_2, coord_min, coord_max)
+        #if all nodes of the current distribution were created -> move to the next der type
+        if current_der_nodes >= current_type[2]*clusters*node_cluster
+          current_distribution += 1
+          current_type = der_distribution[current_distribution]
+          current_der_nodes = 0
+        end
+        d = generate_der(node, current_type[1], power_avg[current_distribution], power_sd[current_distribution], 
+                          sd_avg, sd_sd, id, radius_2, coord_min, coord_max)
         #create the edge
-        edge = ElecEdge(node, d, Float64(cost_param2*calculateLength(node, d)), elec_id)
+        edge = ElecEdge(node, d, elec_id)
         push!(node.elec_edges, edge)
         push!(d.elec_edges, edge)
         push!(elec_edges, edge)
@@ -107,6 +124,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
         push!(nodes, d)
         id += 1
         elec_id += 1
+        current_der_nodes += 1
       end
     end
   end
@@ -116,20 +134,20 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   #the node is fixed at (1,1)
   x = 1
   y = 1
-  mngmt = Node(management, id, x, y, infra_node_values, 0.0, Edge[],  Edge[])
+  mngmt = Node(management, none, id, x, y, infra_node_values, 0.0, Edge[],  Edge[])
   sub = min(mngmt, second_elec_roots)  
   push!(nodes, mngmt)
   push!(leaf_nodes, mngmt)
   id += 1 
 
-  edge =  ElecEdge(mngmt, sub, Float64(cost_param2*calculateLength(mngmt, sub)), elec_id)
+  edge =  ElecEdge(mngmt, sub, elec_id)
   push!(mngmt.elec_edges, edge)
   push!(sub.elec_edges, edge)
   push!(elec_edges, edge)
-  elec_id = elec_id + 1
+  elec_id += 1
 
   #now generate a different set of root nodes for the communication network (with different coordinates)
-  com_root = Node(gateway, id,  Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 
+  com_root = Node(gateway, none, id,  Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), 
                   infra_node_values, 0.0, Edge[], Edge[])
   push!(nodes, com_root)
   id += 1
@@ -137,14 +155,14 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
   towers = Node[]
   #create the second level of nodes
   for i in 1:clusters
-    x = calculateCoordinate(com_root.x, radius_1, coord_min, coord_max)
-    y = calculateCoordinate(com_root.y, radius_1, coord_min, coord_max)
-    tow = Node(tower, id, x, y, infra_node_values, 0.0, Edge[], Edge[])
+    x = calculate_coordinate(com_root.x, radius_1, coord_min, coord_max)
+    y = calculate_coordinate(com_root.y, radius_1, coord_min, coord_max)
+    tow = Node(tower, none, id, x, y, infra_node_values, 0.0, Edge[], Edge[])
     push!(nodes, tow)
     push!(towers, tow)
    #generate the edge between root and tower
-   #here we put the reliability of the edge to 1.0 because we assume that the infrastrucute is reliable
-    edge = ComEdge(com_root, tow, Float64(cost_param3), com_id, 1.0)
+   #here we put the reliability of the edge to 1.0 because we assume that the infrastructure is reliable
+    edge = ComEdge(com_root, tow, com_id, 1.0)
     push!(com_root.com_edges, edge)
     push!(tow.com_edges, edge)
     push!(com_edges, edge)
@@ -154,14 +172,14 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
 
   #now connect all ders to the nearest towers 
   for n in leaf_nodes
-    tow = min(n, towers)
-    #calculate the reliability of the connection
-    p = Float64(reliability_avg_com + reliability_sd_com*randn())
-    while p > 1.0
-      p =  Float64(reliability_avg_com + reliability_sd_com*randn())
-    end   
+    tow = min(n, towers)  
     #generate the edge between tower and der
-    edge = ComEdge(tow, n, Float64(cost_param3), com_id, p)
+    #if the node is the vmo -> reliability is 1; else the whole problem cannot be calculate_coordinate
+    p = 1.0
+    if n.type == der 
+      p = calculate_reliability(reliability_avg_com, reliability_sd_com)
+    end
+    edge = ComEdge(tow, n, com_id, p)
     push!(tow.com_edges, edge)
     push!(n.com_edges, edge)
     push!(com_edges, edge)  
@@ -206,7 +224,7 @@ function generate_network(node_cluster = 5, clusters = 5, cost_param2 = 2, cost_
 end
 
 "helper function to generate a coordinate value within the radius "
-function calculateCoordinate(ref_value, radius, coord_min, coord_max)
+function calculate_coordinate(ref_value, radius, coord_min, coord_max)
   value = Int64(round((ref_value - radius) + 2*radius*randn(Float16)))
 
   while value < coord_min || value > coord_max || value == ref_value
@@ -217,20 +235,29 @@ function calculateCoordinate(ref_value, radius, coord_min, coord_max)
 end
 
 "helper function to calculate the length of the edge"
-function calculateLength(x, y)
+function calculate_length(x, y)
   return abs(x.x - y.x) + abs(x.y - y.y)
 end
 
+"helper function to calculate the reliability of an object"
+function calculate_reliability(avg, sd)
+  p = avg - sd + 2*sd*randn(Float16)
+  while p > 1.0
+    p = avg - sd + 2*sd*randn(Float16)
+  end
+  return p
+end
 
 "helper function which generates the distributed energy resource node"
-function generateDer(root, power_avg, power_sd, sd_avg, sd_sd, id, radius, coord_min, coord_max)
+function generate_der(root, type, power_avg, power_sd, sd_avg, sd_sd, id, radius, coord_min, coord_max)
   #generate the nodes inside a square (faster/easier to generate than in a circle) with the respective radius_1
-  x = calculateCoordinate(root.x, radius, coord_min, coord_max)
-  y = calculateCoordinate(root.y, radius, coord_min, coord_max)  
+  x = calculate_coordinate(root.x, radius, coord_min, coord_max)
+  y = calculate_coordinate(root.y, radius, coord_min, coord_max)  
 
-  power = Int64(round(power_avg - power_sd + 2*power_sd*randn(Float16)))
+  p = Int64(round(power_avg - power_sd + 2*power_sd*randn(Float16)))
+  power = (p <= 0) ? 0 : p
   sd = sd_avg - sd_sd + 2*sd_sd*randn(Float16)
-  return Node(der, id, x, y, power , sd,  Edge[], Edge[])
+  return Node(der, type, id, x, y, power , sd,  Edge[], Edge[])
 end
 
 "helper function to find the nearest node"
@@ -252,7 +279,7 @@ visualizeNetwork(network)
 
 visualizes the given network
 """
-function visualize_network(network)
+function visualize_network(network; show_embedding = true, save = false, nr =1)
   #add the number of nodes
   g = SimpleGraph(length(network.nodes))
   node_labels = String[]
@@ -295,7 +322,13 @@ function visualize_network(network)
     add_edge!(g, e.from.id, e.to.id)
     push!(edge_color, colorant"red")
   end
+
+  if save 
+    draw(PNG("fig/"*string(nr)* ".png", 16cm, 16cm),   gplot(g, x,y, nodelabel=node_labels, nodefillc = node_color, nodestrokec = node_circles, 
+    nodestrokelw = nodestroke, edgestrokec = edge_color))
+  else 
   #configuration described in https://github.com/JuliaGraphs/GraphPlot.jl/blob/master/src/plot.jl
   gplot(g, x,y, nodelabel=node_labels, nodefillc = node_color, nodestrokec = node_circles, 
         nodestrokelw = nodestroke, edgestrokec = edge_color)
+  end
 end

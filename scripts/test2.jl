@@ -1,16 +1,21 @@
-using JuMP, CPLEX
+using JuMP
 
 include("modelGeneration.jl")
 include("modelStructure.jl")
 include("graphAnalysis.jl")
 include("exampleModel.jl")
+include("dynamicModelAnalysis.jl")
 
 #print(create_scenarios(network.nodes, reliabilities))
 
-example_network = get_example()
+#model size parameters
+clusters = 3
+nodes_per_cluster = 2
+
+model = generate_network(clusters, nodes_per_cluster)
+
+dynamic_model_analysis(.95, model = model)
 
 example_vnr1 = VNR(75, 0.95)
 example_reliabilities = [0.1, 0.3, 0.5, 0.7, 0.9]
 links = [[1,2]]
-print([(i, j) for i in 1:length(example_network.nodes) for j in get_neighboring_com_nodes_id(example_network.nodes[i])])
-#create_minimum_scenarios(example_network.nodes, example_reliabilities, example_vnr1.reliability)

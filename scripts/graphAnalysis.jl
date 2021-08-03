@@ -8,10 +8,10 @@ using Distributions
 """
 get_dependent_nodes(edge)
 
-get all dependent nodes of type der of an edge 
+get the ids of all dependent nodes of type der or management of an edge 
 """
 function get_dependent_nodes(edge)
-    nodes = Node[]    
+    nodes = []    
     if(edge.from.type == gateway || edge.to.type == gateway)
         #get the dependent nodes of all subedges
         if (edge.from.type == tower)
@@ -29,7 +29,7 @@ function get_dependent_nodes(edge)
         end
     else
         #if one of the two nodes of the edge is not the gateway, then we just return the one der connected through this edge
-        (edge.from.type == der) ?  push!(nodes, edge.from) : push!(nodes, edge.to)
+        (edge.from.type == der ||edge.from.type == management) ?  push!(nodes, edge.from.id) : push!(nodes, edge.to.id)
     end
     return nodes
 end
@@ -150,7 +150,7 @@ visualize_vnr(network)
 
 visualizes the given vnr
 """
-function visualize_vnr(network, active_nodes, active_com_edges)
+function visualize_vnr(network, active_nodes, active_com_edges; save = false, nr = "1")
   #add the number of nodes
   g = SimpleGraph(length(network.nodes))
   node_labels = String[]
@@ -191,18 +191,6 @@ function visualize_vnr(network, active_nodes, active_com_edges)
   x = Int64[n.x for n in network.nodes]
   y = Int64[n.y for n in network.nodes]
   
-#  #add elec edges
-#  for e in network.elec_edges
-#    
-#    if active_elec_edges[e.id] > 0.9
-#        add_edge!(g, e.from.id, e.to.id)
-#        push!(edge_color, colorant"gold")
-#    #else 
-#    #    push!(edge_color, colorant"floralwhite")
-#    end
-#  end
-
-  #add com edges
   for e in network.com_edges
     
     if active_com_edges[e.id] > 0.9
@@ -212,9 +200,14 @@ function visualize_vnr(network, active_nodes, active_com_edges)
         #push!(edge_color, colorant" lightsalmon")
     end
   end
+  if save 
+    draw(PNG(pwd()*"\\fig\\"*nr*".png", 16cm, 16cm),   gplot(g, x,y, nodelabel=node_labels, nodefillc = node_color, nodestrokec = node_circles, 
+    nodestrokelw = nodestroke, edgestrokec = edge_color))
+  else 
   #configuration described in https://github.com/JuliaGraphs/GraphPlot.jl/blob/master/src/plot.jl
   gplot(g, x,y, nodelabel=node_labels, nodefillc = node_color, nodestrokec = node_circles, 
         nodestrokelw = nodestroke, edgestrokec = edge_color)
+  end
 end
 """
 helper function that prints the graph information in a non-graphic format for debugging purposes

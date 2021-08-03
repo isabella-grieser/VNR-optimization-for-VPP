@@ -21,11 +21,19 @@ end
     #the vpp management office
     management
     #the load
-    load
+    loads
+end
+#the subtypes of der
+@enum NodeSubtype begin
+    wind
+    solar
+    #for all others -> they have no subtype
+    none
 end
 #structs for network generation
-mutable struct Node{P<:Nodetype,T<:Int64,V<:Float64,U<:Edge}
+mutable struct Node{P<:Nodetype,R<:NodeSubtype,T<:Int64,V<:Float64,U<:Edge}
     type::P
+    subtype::R
     id::T
     x::T
     y::T
@@ -37,18 +45,16 @@ mutable struct Node{P<:Nodetype,T<:Int64,V<:Float64,U<:Edge}
     com_edges::Vector{U}
 end
 "an electrical connection between two nodes"
-struct ElecEdge{T<:Node, V<:Float64,U<:Int64}<:Edge
+struct ElecEdge{T<:Node, U<:Int64}<:Edge
     from::T
     to::T
-    cost::V
     id::U
     #capacity::V
 end
 "a connection between two computing nodes"
-mutable struct ComEdge{T<:Node,V<:Float64,U<:Int64}<:Edge
+mutable struct ComEdge{T<:Node, U<:Int64, V<:Float64}<:Edge
     from::T
     to::T
-    cost::V
     id::U
     reliability::V
     #do I need the bandwidth
@@ -61,7 +67,7 @@ struct Network{T<:Node,V<:ElecEdge,Z<:ComEdge}
     com_edges::Vector{Z}
 end
 
-struct VNR{T<:Int64,V<:Float64}
-    power::T
+struct VNR{V<:Float64}
+    power::V
     reliability::V
 end
