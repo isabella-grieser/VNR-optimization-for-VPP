@@ -9,8 +9,9 @@ using Base.Sort
 include("modelStructure.jl")
 
 """
-function generateNetwork(node_cluster = 5, clusters = 5, cost_param1 = 1, cost_param2 = 2, cost_param3 = 1, size_array = [], 
-  radius_1 = 30, radius_2 = 10, power_avg = 80, power_sd = 10, reliability_avg = .70, reliability_sd = .10)
+function generate_network(clusters = 5, node_cluster = 5; size_array = [], 
+  radius_1 = 20, radius_2 = 5, power_avg = [80], power_sd = [10], der_distribution = [(solar, 1.0)], 
+  sd_avg = 20.0, sd_sd = 1.0, reliability_avg_com = .97, reliability_sd_com = .05)
 
 generates the electrical distribution and communication network based on a radial (star) topology
 with the given node and cluster amount; the individual cluster sizes can also be given as an array
@@ -27,7 +28,7 @@ with the given node and cluster amount; the individual cluster sizes can also be
 """
 function generate_network(clusters = 5, node_cluster = 5; size_array = [], 
   radius_1 = 20, radius_2 = 5, power_avg = [80], power_sd = [10], der_distribution = [(solar, 1.0)], 
-  sd_avg = 20.0, sd_sd = 1.0, reliability_avg_com = .95, reliability_sd_com = .5)
+  sd_avg = 20.0, sd_sd = 1.0, reliability_avg_com = .97, reliability_sd_com = .05)
 
   elec_edges = ElecEdge[]
   com_edges = ComEdge[]
@@ -44,7 +45,7 @@ function generate_network(clusters = 5, node_cluster = 5; size_array = [],
   coord_min = 2
   coord_max = 64
   #(tecnical,for the constraint solving) power output values for infrastructure nodes
-  infra_node_values = 1
+  infra_node_values = .001
   #first, generate the electrical network; based on that we will later generate the communication network
   #first,generate the root node
   root = Node(substation, none, id, Int64(round(rand(coord_min: coord_max))), Int64(round(rand(coord_min:coord_max))), infra_node_values, 
@@ -179,7 +180,14 @@ function generate_network(clusters = 5, node_cluster = 5; size_array = [],
     if n.type == der 
       p = calculate_reliability(reliability_avg_com, reliability_sd_com)
     end
-    edge = ComEdge(tow, n, com_id, p)
+    edge = nothing 
+    if n.type == management
+      #to simplify things, we will assume that the management office can always be connected
+      #(else sometimes the embedding does not work)
+      edge = ComEdge(tow, n, com_id, 1.0)
+    else    
+      edge = ComEdge(tow, n, com_id, p)
+    end
     push!(tow.com_edges, edge)
     push!(n.com_edges, edge)
     push!(com_edges, edge)  
@@ -254,8 +262,8 @@ function generate_der(root, type, power_avg, power_sd, sd_avg, sd_sd, id, radius
   x = calculate_coordinate(root.x, radius, coord_min, coord_max)
   y = calculate_coordinate(root.y, radius, coord_min, coord_max)  
 
-  p = Int64(round(power_avg - power_sd + 2*power_sd*randn(Float16)))
-  power = (p <= 0) ? 0 : p
+  p = Float64(round(power_avg - power_sd + 2*power_sd*randn(Float16)))
+  power = (p <= 0) ? Float64(0) : p
   sd = sd_avg - sd_sd + 2*sd_sd*randn(Float16)
   return Node(der, type, id, x, y, power , sd,  Edge[], Edge[])
 end

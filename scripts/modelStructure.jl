@@ -37,7 +37,7 @@ mutable struct Node{P<:Nodetype,R<:NodeSubtype,T<:Int64,V<:Float64,U<:Edge}
     id::T
     x::T
     y::T
-    power::T
+    power::V
     sd::V
     #do I even need the computing power?
     #comp_power::T

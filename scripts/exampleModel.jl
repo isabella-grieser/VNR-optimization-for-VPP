@@ -25,7 +25,7 @@ function get_example()
   #x and y coordinates for all nodes; index equals the node id
   x = [5 , 10 , 5 , 12 , 3 , 1,  9 , 2 , 10]
   y = [5 , 3 , 10 , 5 , 7 , 1, 7,  4 , 11]
-  com_rel = 0.95
+  com_rel = .95
 
 
   root = Node(substation, none, id, x[id], y[id], 0, 
@@ -123,7 +123,12 @@ function get_example()
   for n in leaf_nodes
     tow = min(n, towers)
     #generate the edge between tower and der
-    edge = ComEdge(tow, n, com_id, com_rel)
+    edge = nothing
+    if n.type == management
+      edge = ComEdge(tow, n, com_id, 1.0) 
+    else
+     edge = ComEdge(tow, n, com_id, com_rel)      
+    end
     push!(tow.com_edges, edge)
     push!(n.com_edges, edge)
     push!(com_edges, edge)  

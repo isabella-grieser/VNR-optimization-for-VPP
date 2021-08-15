@@ -28,8 +28,12 @@ function get_dependent_nodes(edge)
             end
         end
     else
-        #if one of the two nodes of the edge is not the gateway, then we just return the one der connected through this edge
-        (edge.from.type == der ||edge.from.type == management) ?  push!(nodes, edge.from.id) : push!(nodes, edge.to.id)
+        #if one of the two nodes of the edge is the der, then we just return the one der connected through this edge
+        if edge.from.type == der
+           push!(nodes, edge.from.id) 
+        elseif edge.to.type == der
+           push!(nodes, edge.to.id)
+        end
     end
     return nodes
 end
@@ -43,26 +47,23 @@ function get_neighboring_com_edges(n)
 end
 
 """
-  returns all neighboring nodes connected through the electrical network
-"""
-function get_neighboring_elec_edges(n)
-  return [(i.from.id == n.id) ? i.to : i.from for i in n.elec_edges]
-end
-
-"""
-  returns all neighboring nodes connected through the communication network
+  returns all neighboring node IDs connected through the communication network
 """
 function get_neighboring_com_nodes_id(n)
   return [(i.from.id == n.id) ? i.to.id : i.from.id for i in n.com_edges]
 end
 """
-  returns all scenario and its probabilities
+  create_scenarios(nodes, reliabilities)
+
+  creates and returns all scenario and its probabilities
+  - 'nodes' : the nodes considered in the scenario creation
+  - 'reliabilities' : the reliability levels considered in the scenario creation
 """
 function create_scenarios(nodes, reliabilities)
   #first, create the single reliability scenarios for each node
   single_scenarios = []
   for n in nodes
-    if n.power > 1
+    if n.power > .01
       push!(single_scenarios, [(r, calculate_power(n, r)) for r in reliabilities])
     else
       push!(single_scenarios, [(1, 0)])     
@@ -80,7 +81,7 @@ function create_scenarios(nodes, reliabilities)
   return all_scenarios
 end
 """
-  private function that calculates the cartesian of two arrays
+  helper function that calculates the cartesian of two arrays
 """
 function calculate_cartesian(arr1, arr2)
   cartesian = []
@@ -91,23 +92,30 @@ function calculate_cartesian(arr1, arr2)
   end
   return cartesian
 end
+
 """
   calculates the power output given a reliability level
 """
 function calculate_power(n, r)
-  a = quantile(Normal(n.power, n.sd), r)
   return (n.sd > 0) ? quantile(Normal(n.power, n.sd), r) : 0
 end
 
 """
-  returns all scenarios and its probabilities minus the scerarios that need to be fulfilled anyway
+  create_minimum_scenarios(nodes, com_links, reliabilities, vnr_reliability)
+  
+  creates and returns all scenarios and its probabilities minus the scerarios that need to be fulfilled anyway
 """
-function create_minimum_scenarios(nodes, reliabilities, vnr_reliability)
+function create_minimum_scenarios(nodes, com_edges, reliabilities, vnr_reliability)
+
   rel = 1 - vnr_reliability
   #calculate the cartesian product
   #there should be a more efficient way to calculate all this (because we only need parts of it)
-  #but I dont know how to calculate an n-cartesian efficently given the constraints
+  #but I dont know how to calculate an n-cartesian efficently given the heuristic constraints
   all_scenarios = create_scenarios(nodes, reliabilities)
+
+  #calculate the lowest com_edge factor of the network 
+  sum_pi = sum((s)->s[1],all_scenarios)
+  min_com_factor = minimum((e)-> (1/sum_pi)*(1-e.reliability), com_edges)  
   #this implementation of removing unecessary scenarios is kind of inefficient I guess
   #sort the list by scenario probabilities
   sort!(all_scenarios, by=x->x[1])
@@ -133,7 +141,7 @@ function create_minimum_scenarios(nodes, reliabilities, vnr_reliability)
         break
       end
     else 
-      if probability > rel
+      if min_com_factor*probability > rel
         #else we put the flag that we only want the next elements and then stop
         next_is_last = true
       end
@@ -148,9 +156,15 @@ end
 """
 visualize_vnr(network)
 
-visualizes the given vnr
+visualizes the given vnr and saves it if necessary
+
+- 'network' : the used network 
+- 'active_nodes' : the nodes activated in the embedding
+- 'active_com_edges' : the communication links activated in the embedding
+- 'save' : if the visualization should be saved
+- 'name' : if the visualization should be saved; the name under it should be saved
 """
-function visualize_vnr(network, active_nodes, active_com_edges; save = false, nr = "1")
+function visualize_vnr(network, active_nodes, active_com_edges; save = false, name = "1")
   #add the number of nodes
   g = SimpleGraph(length(network.nodes))
   node_labels = String[]
@@ -201,7 +215,8 @@ function visualize_vnr(network, active_nodes, active_com_edges; save = false, nr
     end
   end
   if save 
-    draw(PNG(pwd()*"\\fig\\"*nr*".png", 16cm, 16cm),   gplot(g, x,y, nodelabel=node_labels, nodefillc = node_color, nodestrokec = node_circles, 
+    draw(PNG(pwd()*"\\fig\\"*name*".png", 16cm, 16cm),   
+    gplot(g, x,y, nodelabel=node_labels, nodefillc = node_color, nodestrokec = node_circles, 
     nodestrokelw = nodestroke, edgestrokec = edge_color))
   else 
   #configuration described in https://github.com/JuliaGraphs/GraphPlot.jl/blob/master/src/plot.jl

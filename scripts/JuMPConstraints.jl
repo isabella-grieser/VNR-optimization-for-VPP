@@ -5,9 +5,20 @@ include("modelStructure.jl")
 include("graphAnalysis.jl")
 """
 calculates the embedding using the constraints defined in the notebook 
+  
+#arguments
+- 'reliability' : the reliability of the vnr
+- 'times' : the time that we want to analyse
+- 'type' : the vne type that we want to use (currently available: "exact": the exact method of the project; 
+"heuristic": the method where node scenario and link failure are independent; "simple": the method without the complex node scenarios)
+- 'lambda, lambda_com_edge' : the unit price parameters for the model
+- 'update' : if the model parameters (the DER values) need to be updated
+- 'calculate_reliability' : if the reliability of the embedding needs to be calculated (based on the reliability
+constraints of the exact model)
 """
 function calculate_embedding(network, vnr, reliabilities, scenario_outputs = []; show_failures = false, 
-    show_embedding = false, type = "exact", lambda = 2.0, lambda_com_edge = 2.0, save = false, nr = "1")
+    show_embedding = false, type = "exact", lambda = 2.0, lambda_com_edge = 2.0, save = false, nr = "1",
+    calculate_reliability = false)
 
 tick = time()
 model = direct_model(Gurobi.Optimizer())
@@ -70,26 +81,33 @@ end
 
 #now begin the scenario constraints 
 
-@variable(model,epsilon[1:length(network.com_edges), 1:length(network.nodes)], binary = true)
-
 if type == "exact"
 
 #scenario variables 
-@variable(model,zeta[1:length(scenario_outputs), 1:length(network.com_edges)], binary = true)
-
+@variable(model,zeta[1:length(scenario_outputs), 1:(length(network.com_edges)+1)], binary = true)
+@variable(model,epsilon[1:(length(network.com_edges)+1), 1:length(network.nodes)], binary = true)
 
 #calculate the link reliability
 @constraint(model, c13[i = 1:length(network.nodes), l = 1:length(network.com_edges); 
                         i in get_dependent_nodes(network.com_edges[l])], epsilon[l, i] == 0)
+@constraint(model, c14[i = 1:length(network.nodes)], epsilon[length(network.com_edges)+1, i] == 1)
 
-@constraint(model, c14[i = 1:length(scenario_outputs), l = 1:length(network.com_edges)], zeta[i, l]*vnr.power
+@constraint(model, c15[i = 1:length(scenario_outputs), l = 1:(length(network.com_edges)+1)], zeta[i, l]*vnr.power
         + sum(x[2,n]*scenario_outputs[i][2][n]*epsilon[l, n] for n in 1:length(network.nodes)) >= vnr.power)
 
+#probability variables
+#use the sum of all probabilities, not of the reduced size of probabilities
+sum_pi = sum((s)->s[1],create_scenarios(network.nodes, reliabilities))
+
 #scenario node constraint; go over all scenarios and check if the power constraint is solved 
-@constraint(model, c15, sum(zeta[i, l]*scenario_outputs[i][1]*network.com_edges[l].reliability
-        for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges)) <= 1.0-vnr.reliability)    
+@constraint(model, c16, sum(zeta[i, l]*scenario_outputs[i][1]*(1/sum_pi)*(1-network.com_edges[l].reliability)
+        for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges)) 
+        + sum(zeta[i, length(network.com_edges)+1]*scenario_outputs[i][1]
+        for i in 1:length(scenario_outputs))<= 1.0-vnr.reliability)
+
 elseif type == "heuristic"
 
+@variable(model,epsilon[1:length(network.com_edges), 1:length(network.nodes)], binary = true)
 #scenario variables 
 @variable(model,zeta[1:length(scenario_outputs)], binary = true)
 @variable(model,zeta_link[1:length(network.com_edges)], binary = true)
@@ -108,7 +126,7 @@ elseif type == "heuristic"
 @constraint(model, c17, sum(zeta_link[l]*network.com_edges[l].reliability
                             for l in 1:length(network.com_edges)) <= 1.0-vnr.reliability)
 elseif type == "simple"
-
+@variable(model,epsilon[1:(length(network.com_edges)+1), 1:length(network.nodes)], binary = true)
 @variable(model,zeta_link[1:length(network.com_edges)], binary = true)   
 #node constraints
 @constraint(model, c14, sum(x[2,n]*network.nodes[n].power for n in 1:length(network.nodes)) >= vnr.power)
@@ -119,6 +137,9 @@ elseif type == "simple"
 
 @constraint(model, c16, sum(zeta_link[l]*network.com_edges[l].reliability
                             for l in 1:length(network.com_edges)) <= 1.0-vnr.reliability)
+elseif type == "no_link_failure"
+#node constraints
+@constraint(model, c14, sum(x[2,n]*network.nodes[n].power for n in 1:length(network.nodes)) >= vnr.power)
 end
 
 
@@ -132,7 +153,60 @@ optimize!(model)
 
 tock = time() - tick 
 if show_failures
-    display(value.(zeta))
+    display(value.(epsilon))
+end
+
+if calculate_reliability
+    #calculate the reliability based on the reliability calculation of the exact model
+    if termination_status(model) != MOI.OPTIMAL
+        return nothing, tock
+    else
+        #working with values.(x) does not work directly (no idea why) -> create a variable x
+        #Im stupid and used values.(x) instead of value.(x)
+        x = [i for i in value.(x)[2,:]]
+        sum_pi = sum((s)->s[1], create_scenarios(network.nodes, reliabilities))
+        #calculate zeta and epsilon for all approaches based on the active nodes
+        z = zeros(length(scenario_outputs), (length(network.com_edges)+1))
+        e = zeros((length(network.com_edges)+1), length(network.nodes))
+        for n in network.nodes
+            for l in network.com_edges
+                if n.id in get_dependent_nodes(l)
+                    e[l.id, n.id] = 0
+                else
+                    e[l.id, n.id] = 1
+                end
+            end
+            e[length(network.com_edges)+1, n.id] = 1
+        end
+        for (i,v) in enumerate(scenario_outputs)
+            for l in network.com_edges
+                power_sum = sum([x[n]*v[2][n]*e[l.id, n] 
+                    for n in 1:length(network.nodes)])
+                if  power_sum < vnr.power
+                    z[i, l.id] = 1
+                else
+                    z[i, l.id] = 0
+                end
+            end
+            power_sum = sum(x[n]*v[2][n]*e[length(network.com_edges)+1, n] 
+            for n in 1:length(network.nodes))
+            if (power_sum < vnr.power)
+                z[i, length(network.com_edges)+1] = 1
+            else
+                z[i, length(network.com_edges)+1] = 0
+            end
+        end
+
+        #check how many nodes are activated
+        print("activated nodes:"*string(sum(x))*"; ") 
+        #now calculate the reliability
+        failure = (sum(z[i, l]*scenario_outputs[i][1]*(1/sum_pi)*(1-network.com_edges[l].reliability)
+        for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges)) 
+        + sum(z[i, length(network.com_edges)+1]*scenario_outputs[i][1]
+        for i in 1:length(scenario_outputs)))
+
+        return (1 - failure), tock
+    end   
 end
 
 if show_embedding
@@ -144,7 +218,7 @@ if show_embedding
         @printf("optimal solution could not be found")
         #visualize_vnr(network, zeros(Int32, 2, length(network.nodes)), zeros(Int32, 1, length(network.com_edges)), save = save, nr = nr)         
     else
-        visualize_vnr(network, value.(x), value.(y), save = save, nr = nr)        
+        visualize_vnr(network, value.(x), value.(y), save = save, name = nr)        
     end
 else 
     if termination_status(model) != MOI.OPTIMAL
@@ -153,5 +227,4 @@ else
         print("problem has optimal solution")
     end
 end
-
 end
