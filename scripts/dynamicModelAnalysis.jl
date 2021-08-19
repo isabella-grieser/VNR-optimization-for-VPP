@@ -35,7 +35,8 @@ size = 36*10
 factor = 10^6
 #time
 unit_time = 60*60
-
+#scale of the power output
+power_scale = .4
 """
 calculates the vne for a specific model and a specific approach given the 
 data of the city Mannheim; uses all approaches defined in the project
@@ -50,10 +51,10 @@ data of the city Mannheim; uses all approaches defined in the project
 - 'calculate_reliability' : if the reliability of the embedding needs to be calculated (based on the reliability
 constraints of the exact model)
 - 'scale' : the scale with which the power demand is divided with 
-- 'vnr_value' : the power demand if we wish to use an specific value
+- 'vnr_value' : if we wish to use a percentage of the network as the power output
 """
 function dynamic_model_analysis(reliability = .95; model = nothing, times = 10, type = "exact", lambda = 2.0, lambda_com_edge = 2.0,
-  update = false, calculate_reliability = false, scale = 1, vnr_value = 0, reliabilities = [0.3, 0.5, 0.7])
+  update = false, calculate_reliability = false, scale = 1, vnr_value = false, reliabilities = [0.4, 0.5, 0.6])
 
   #change directory to the data directory
   wind_vals = []
@@ -93,23 +94,16 @@ end
   sun_vals = [(s[1], s[2]*eff*unit_time*size/factor) for s in sun_vals]
   wind_vals = [(w[1], (w[2]^3)*rho*area/(2*factor)) for w in wind_vals]
 
-  #calculate the embedding for this iteration
-#  for (i, l) in enumerate(loads)
-#    #we already used the first value to generate the network
-#    vnr = VNR(l[2], reliability)
-#    model = update_model_parameters(model, sun_vals[i][2], wind_vals[i][2])
-#    minimum_scenarios = create_minimum_scenarios(model.nodes, reliabilities, vnr.reliability)
-#    calculate_embedding(model, vnr, reliabilities, minimum_scenarios, show_embedding = true, save = true, nr = "result_"*type*"_"*l[1])
-#  end
-  #I wanted to make a gif of all embeddings but it just does not want to work :(
-
-   vnr = VNR(Float64(loads[times][2]/scale), reliability)
-   if vnr_value != 0
-    vnr = VNR(Float64(vnr_value), reliability)
-   end
 
    if update 
     model = update_model_parameters(model, sun_vals[times][2], wind_vals[times][2])
+   end
+
+   vnr = VNR(Float64(loads[times][2]/scale), reliability)
+   if vnr_value == true
+    total_power = sum([node.power for node in model.nodes])
+    vnr_power = total_power*power_scale
+    vnr = VNR(Float64(vnr_power), reliability)
    end
 
    minimum_scenarios = create_minimum_scenarios(model.nodes, model.com_edges, reliabilities, vnr.reliability)

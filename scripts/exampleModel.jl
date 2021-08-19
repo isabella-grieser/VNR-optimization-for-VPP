@@ -18,9 +18,9 @@ function get_example()
   com_id = 1
 
   #variables of the example model with two der nodes
-  power1 = 60
+  power1 = 60.0
   sd1 = 10.0
-  power2 = 30
+  power2 = 30.0
   sd2 = 5.0  
   #x and y coordinates for all nodes; index equals the node id
   x = [5 , 10 , 5 , 12 , 3 , 1,  9 , 2 , 10]
@@ -28,15 +28,15 @@ function get_example()
   com_rel = .95
 
 
-  root = Node(substation, none, id, x[id], y[id], 0, 
+  root = Node(substation, none, id, x[id], y[id], 0.0, 
               0.0, Edge[], Edge[])
   push!(nodes, root)
   id += 1
   
   #create two substations
-  sub1 = Node(feeder, none, id, x[id], y[id], 0, 0.0, Edge[],  Edge[])
+  sub1 = Node(feeder, none, id, x[id], y[id], 0.0, 0.0, Edge[],  Edge[])
   id += 1
-  sub2 = Node(feeder, none, id, x[id], y[id], 0, 0.0, Edge[],  Edge[])
+  sub2 = Node(feeder, none, id, x[id], y[id], 0.0, 0.0, Edge[],  Edge[])
   id += 1
   push!(nodes, sub1)
   push!(nodes, sub2)
@@ -78,7 +78,7 @@ function get_example()
 
   #generate the vpp management office node
   #the node is fixed at (1,1)
-  mngmt = Node(management, none, id, 1, 1, 0, 0.0, Edge[],  Edge[])
+  mngmt = Node(management, none, id, 1, 1, 0.0, 0.0, Edge[],  Edge[])
   sub3 = min(mngmt, second_elec_roots)  
   push!(nodes, mngmt)
   push!(leaf_nodes, mngmt)
@@ -98,7 +98,7 @@ function get_example()
 
   towers = Node[]
   #create the second level of nodes
-  tow1 = Node(tower, none, id, x[id], y[id], 0, 0.0, Edge[], Edge[])
+  tow1 = Node(tower, none, id, x[id], y[id], 0.0, 0.0, Edge[], Edge[])
   push!(nodes, tow1)
   push!(towers, tow1)
   #generate the edge between root and tower
@@ -110,7 +110,7 @@ function get_example()
   id += 1
   com_id += 1
 
-  tow2 = Node(tower, none, id, x[id], y[id], 0, 0.0, Edge[], Edge[])
+  tow2 = Node(tower, none, id, x[id], y[id], 0.0, 0.0, Edge[], Edge[])
   push!(nodes, tow2)
   push!(towers, tow2)
   cedge2 = ComEdge(com_root, tow2, com_id, 1.0)
