@@ -35,8 +35,6 @@ size = 36*10
 factor = 10^6
 #time
 unit_time = 60*60
-#scale of the power output
-power_scale = .4
 """
 calculates the vne for a specific model and a specific approach given the 
 data of the city Mannheim; uses all approaches defined in the project
@@ -54,7 +52,8 @@ constraints of the exact model)
 - 'vnr_value' : if we wish to use a percentage of the network as the power output
 """
 function dynamic_model_analysis(reliability = .95; model = nothing, times = 10, type = "exact", lambda = 2.0, lambda_com_edge = 2.0,
-  update = false, calculate_reliability = false, scale = 1, vnr_value = false, reliabilities = [0.4, 0.5, 0.6])
+  update = false, calculate_reliability = false, scale = 1, vnr_value = false, reliabilities = [0.4, 0.5, 0.6],
+  power_scale = .35)
 
   #change directory to the data directory
   wind_vals = []
@@ -101,7 +100,7 @@ end
 
    vnr = VNR(Float64(loads[times][2]/scale), reliability)
    if vnr_value == true
-    total_power = sum([node.power for node in model.nodes])
+    total_power = sum([node.power for node in model.nodes if node.type == der])
     vnr_power = total_power*power_scale
     vnr = VNR(Float64(vnr_power), reliability)
    end

@@ -92,7 +92,7 @@ function get_example()
 
   #now generate a different set of root nodes for the communication network (with different coordinates)
   com_root = Node(gateway, none, id,  x[id], y[id], 
-              0, 0.0, Edge[], Edge[])
+              0.0, 0.0, Edge[], Edge[])
   push!(nodes, com_root)
   id += 1
 

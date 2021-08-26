@@ -10,8 +10,11 @@ plt = Plots
 loops = 5
 
 #model size parameters
-max_clusters = 7
+max_clusters = 3
 max_nodes_per_cluster = 1
+
+min_clusters = 2
+min_nodes_per_cluster = 1
 
 #the time that we will use in our evaluation
 used_time = 10
@@ -19,10 +22,9 @@ used_time = 10
 unit_price = .3
 
 save = true
-#when saving -> save name
-name = "test"
 
 #scale of the power output
+eval_reliabilities = [0.2, 0.5, 0.8]
 power_scale = .2
 
 """calculates the evaluation based on the global parameters defined in this file"""
@@ -32,8 +34,8 @@ function make_evaluation()
     #the reliability of the approaches
     rel = zeros(length(approaches), loops, max_clusters*max_nodes_per_cluster)
 
-    for c in 1:max_clusters
-        for n in 1:max_nodes_per_cluster
+    for c in min_clusters:max_clusters
+        for n in min_nodes_per_cluster:max_nodes_per_cluster
         #generate a new model for each iteration
         used_model = generate_network(c, n)
         #calculate the power output that we want to have for the vnr
@@ -46,8 +48,9 @@ function make_evaluation()
                     # -> ignore the first calculation
                     while r === nothing || r < 0 || (first_iter == 0 && c == 1 && n == 1 && index == 1 && i == 1) 
                         tick = time()              
-                        r, tock = dynamic_model_analysis(.90, model = used_model, times = used_time, type = a, 
-                        lambda = unit_price, update = true, calculate_reliability = true,  vnr_value = true)                     
+                        r, tock = dynamic_model_analysis(.80, model = used_model, times = used_time, type = a, 
+                        lambda = unit_price, update = true, calculate_reliability = true,  vnr_value = true,
+                        reliabilities = eval_reliabilities, power_scale = power_scale)                     
                         #if an embedding cannot be found -> generate a new model where an embedding hopefully can be found
                         if  r === nothing || r < 0
                             used_model = generate_network(c, n) 
@@ -101,65 +104,65 @@ function make_evaluation()
         end
     end
     time_max = maximum([time_means[a,i] for a in 1:length(approaches) 
-                    for i in 1:(max_clusters*max_nodes_per_cluster)])
+                    for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)])
 
     #plotting functions
     #subplots for the time means and variance
-    p1 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [time_means[1,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
+    p1 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [time_means[1,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
 #    ribbon=[time_var[1,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
     #ylims = (0,time_max), 
     yaxis=:log,  label = ["exact"])
 
-    p2 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [time_means[2,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
+    p2 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [time_means[2,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
 #    ribbon=[time_var[2,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
     #ylims = (0,time_max), 
     yaxis=:log, label = ["heuristic"])
 
-    p3 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [time_means[3,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
+    p3 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [time_means[3,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
 #    ribbon=[time_var[3,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
     #ylims = (0,time_max), 
     yaxis=:log, label = ["simple"])
 
-    p4 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [time_means[4,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
+    p4 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [time_means[4,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
 #    ribbon=[log(time_var[4,i]) for i in 1:(max_clusters*max_nodes_per_cluster)],
     #ylims = (0,time_max), 
     yaxis=:log, label = ["no link failure"])
         
     plt.plot(p1, p2, p3, p4,layout =(2,2))
     if save
-        plt.savefig(pwd()*"\\fig\\time.png")
+        plt.savefig(pwd()*"\\fig\\time"*string(eval_reliabilities[1])*".png")
     end
     #subplot for the reliability mean and variance
 
     rel_max = maximum([rel_means[a,i] + rel_var[a,i]/10 for a in 1:length(approaches) 
-                        for i in 1:(max_clusters*max_nodes_per_cluster)])
-    p1 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[1,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[1,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
+                        for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)])
+    p1 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [rel_means[1,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
+    ribbon=[rel_var[1,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
     ylims = (0,rel_max), label = ["exact"])
 
-    p2 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[2,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[2,i] for i in 1:(max_clusters*max_nodes_per_cluster)], 
+    p2 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [rel_means[2,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
+    ribbon=[rel_var[2,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
     ylims = (0,rel_max), label = ["heuristic"])
 
-    p3 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[3,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[3,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
+    p3 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [rel_means[3,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
+    ribbon=[rel_var[3,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
     ylims = (0,rel_max), label = ["simple"])
 
-    p4 = plt.plot([i for i in 1:(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[4,i] for i in 1:(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[4,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
+    p4 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
+    [rel_means[4,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
+    ribbon=[rel_var[4,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
     ylims = (0,rel_max), label = ["no link failure"])
 
     plt.plot(p1, p2, p3, p4,layout =(2,2))
     if save
-        plt.savefig(pwd()*"\\fig\\reliability.png")        
+        plt.savefig(pwd()*"\\fig\\reliability"*string(eval_reliabilities[1])*".png")        
     end
 
     #save the values as a csv file
@@ -175,7 +178,7 @@ function make_evaluation()
                     for i in 1:(max_clusters*max_nodes_per_cluster)],
         RelVar =  [rel_var[a,i] for a in 1:length(approaches) 
                     for i in 1:(max_clusters*max_nodes_per_cluster)])
-    CSV.write(pwd()*"\\eval\\results.csv", t_save, delim=';')      
+    CSV.write(pwd()*"\\eval\\results"*string(eval_reliabilities[1])*".csv", t_save, delim=';')      
 end
 
 

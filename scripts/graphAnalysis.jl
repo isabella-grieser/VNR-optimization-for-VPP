@@ -97,7 +97,8 @@ end
   calculates the power output given a reliability level
 """
 function calculate_power(n, r)
-  return (n.sd > 0) ? quantile(Normal(n.power, n.sd), r) : 0
+  p =  (n.sd > 0) ? quantile(Normal(n.power, n.sd), r) : 0
+  return (p > 0) ? p : 0
 end
 
 """
