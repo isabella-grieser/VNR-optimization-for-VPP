@@ -115,7 +115,9 @@ function create_minimum_scenarios(nodes, com_edges, reliabilities, vnr_reliabili
   all_scenarios = create_scenarios(nodes, reliabilities)
 
   #calculate the lowest com_edge factor of the network 
-  sum_pi = sum((s)->s[1],all_scenarios)
+  sum_pi = sum(all_scenarios[i][1]*(1-com_edges[l].reliability)
+        for i in 1:length(all_scenarios) for l in 1:length(com_edges))
+  sum_pi += sum((s)->s[1],all_scenarios)
   min_com_factor = minimum((e)-> (1/sum_pi)*(1-e.reliability), com_edges)  
   #this implementation of removing unecessary scenarios is kind of inefficient I guess
   #sort the list by scenario probabilities

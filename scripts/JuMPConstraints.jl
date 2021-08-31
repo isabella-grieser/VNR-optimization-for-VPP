@@ -97,13 +97,15 @@ if type == "exact"
 
 #probability variables
 #use the sum of all probabilities, not of the reduced size of probabilities
-sum_pi = sum((s)->s[1],create_scenarios(network.nodes, reliabilities))
+sum_pi = sum(scenario_outputs[i][1]*(1-network.com_edges[l].reliability)
+        for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges))
+sum_pi += sum((s)->s[1], scenario_outputs)
 
 #scenario node constraint; go over all scenarios and check if the power constraint is solved 
-@constraint(model, c16, sum(zeta[i, l]*scenario_outputs[i][1]*(1/sum_pi)*(1-network.com_edges[l].reliability)
+@constraint(model, c16, (1/sum_pi)*(sum(zeta[i, l]*scenario_outputs[i][1]*(1-network.com_edges[l].reliability)
         for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges)) 
         + sum(zeta[i, length(network.com_edges)+1]*scenario_outputs[i][1]
-        for i in 1:length(scenario_outputs))<= 1.0-vnr.reliability)
+        for i in 1:length(scenario_outputs)))<= 1.0-vnr.reliability)
 
 elseif type == "heuristic"
 
@@ -112,12 +114,15 @@ elseif type == "heuristic"
 @variable(model,zeta[1:length(scenario_outputs)], binary = true)
 @variable(model,zeta_link[1:length(network.com_edges)], binary = true)
 
+#normalization factor again
+sum_pi = sum((s)->s[1], scenario_outputs)
 #then, add the new constraints
 #node constraints
 @constraint(model, c14[i = 1:length(scenario_outputs)], zeta[i]*vnr.power 
     + sum(x[2,n]*scenario_outputs[i][2][n] for n in 1:length(network.nodes)) >= vnr.power)
 
-@constraint(model, c15, sum(zeta[i]*scenario_outputs[i][1] for i in 1:length(scenario_outputs)) <= 1.0-vnr.reliability)
+@constraint(model, c15, (1/sum_pi)*(sum(zeta[i]*scenario_outputs[i][1] for i in 1:length(scenario_outputs))) 
+                    <= 1.0-vnr.reliability)
 
 #link constraints
 @constraint(model, c16[l = 1:length(network.com_edges)], zeta_link[l]*vnr.power
@@ -153,7 +158,7 @@ optimize!(model)
 
 tock = time() - tick 
 if show_failures
-    display(value.(epsilon))
+    display(value.(zeta))
 end
 
 if calculate_reliability
@@ -164,7 +169,12 @@ if calculate_reliability
         #working with values.(x) does not work directly (no idea why) -> create a variable x
         #Im stupid and used values.(x) instead of value.(x)
         x = [i for i in value.(x)[2,:]]
-        sum_pi = sum((s)->s[1], create_scenarios(network.nodes, reliabilities))
+
+        scen = create_scenarios(network.nodes, reliabilities)
+        sum_pi = sum(scen[i][1]*(1-network.com_edges[l].reliability)
+        for i in 1:length(scen) for l in 1:length(network.com_edges))
+        sum_pi += sum((s)->s[1], scen)
+
         #calculate zeta and epsilon for all approaches based on the active nodes
         z = zeros(length(scenario_outputs), (length(network.com_edges)+1))
         e = zeros((length(network.com_edges)+1), length(network.nodes))
@@ -200,10 +210,10 @@ if calculate_reliability
         #check how many nodes are activated
         print("activated nodes:"*string(sum(x))*"; ") 
         #now calculate the reliability
-        failure = (sum(z[i, l]*scenario_outputs[i][1]*(1/sum_pi)*(1-network.com_edges[l].reliability)
+        failure = (1/sum_pi)*((sum(z[i, l]*scenario_outputs[i][1]*(1-network.com_edges[l].reliability)
         for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges)) 
         + sum(z[i, length(network.com_edges)+1]*scenario_outputs[i][1]
-        for i in 1:length(scenario_outputs)))
+        for i in 1:length(scenario_outputs))))
 
         return (1 - failure), tock
     end   

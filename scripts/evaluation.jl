@@ -1,4 +1,4 @@
-import CSV, Plots, DataFrames
+import CSV, Plots, DataFrames, PyPlot
 
 include("dynamicModelAnalysis.jl")
 
@@ -7,25 +7,25 @@ approaches = ["exact" , "heuristic" ,"simple" , "no_link_failure"]
 
 plt = Plots
 #the max amount of loops; needs to  be at least 2!!!!!(for the calculation of the standard deviation)
-loops = 5
+loops = 15
 
 #model size parameters
-max_clusters = 3
+max_clusters = 7
 max_nodes_per_cluster = 1
 
 min_clusters = 2
 min_nodes_per_cluster = 1
 
 #the time that we will use in our evaluation
-used_time = 10
+used_time = 15
 #the price used for our example
 unit_price = .3
 
 save = true
 
 #scale of the power output
-eval_reliabilities = [0.2, 0.5, 0.8]
-power_scale = .2
+eval_reliabilities = [0.4, 0.5, 0.6]
+power_scale = .35
 
 """calculates the evaluation based on the global parameters defined in this file"""
 function make_evaluation()
@@ -45,17 +45,14 @@ function make_evaluation()
                     tock = 0
                     first_iter = 0
                     #I saw when evaluating that the first calculation really skews the time measurement
-                    # -> ignore the first calculation
-                    while r === nothing || r < 0 || (first_iter == 0 && c == 1 && n == 1 && index == 1 && i == 1) 
+                    # -> ignore the first calculations
+                    while r === nothing || r < 0 || (first_iter < 5 && c == 1 && n == 1 && index == 1 && i == 1) 
                         tick = time()              
-                        r, tock = dynamic_model_analysis(.80, model = used_model, times = used_time, type = a, 
+                        r, tock = dynamic_model_analysis(.95, model = used_model, times = used_time, type = a, 
                         lambda = unit_price, update = true, calculate_reliability = true,  vnr_value = true,
                         reliabilities = eval_reliabilities, power_scale = power_scale)                     
                         #if an embedding cannot be found -> generate a new model where an embedding hopefully can be found
-                        if  r === nothing || r < 0
-                            used_model = generate_network(c, n) 
-                            print("nothing: size:"*string(c*n)*", approach:"*a*"\n")  
-                        end 
+                        print("size:"*string(c*n)*"; ")
                         first_iter += 1 
                         #tock = time()-tick         
                     end
@@ -106,65 +103,39 @@ function make_evaluation()
     time_max = maximum([time_means[a,i] for a in 1:length(approaches) 
                     for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)])
 
-    #plotting functions
-    #subplots for the time means and variance
-    p1 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [time_means[1,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
-#    ribbon=[time_var[1,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
-    #ylims = (0,time_max), 
-    yaxis=:log,  label = ["exact"])
+    #plotting in julia is a nightmare
+    
+    plot_values = [i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)]
 
-    p2 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [time_means[2,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-#    ribbon=[time_var[2,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
-    #ylims = (0,time_max), 
-    yaxis=:log, label = ["heuristic"])
+    #time plot
+    fig = PyPlot.figure(figsize=(14, 4))
+    PyPlot.subplot(121)
+    PyPlot.grid("on")
+    PyPlot.legend(loc="upper right")
+    plot_with_variance(plot_values, time_means[1,:],time_var[1,:] ,"lightcoral", "r")
+    plot_with_variance(plot_values, time_means[2,:],time_var[2,:] ,"cornsilk", "y")
+    plot_with_variance(plot_values, time_means[3,:],time_var[3,:] ,"aqua", "b")
+    plot_with_variance(plot_values, time_means[4,:],time_var[4,:] ,"lightgray", "k")
+    PyPlot.title("Time")
+    PyPlot.ylabel("time in ms")
+    PyPlot.xlabel("number of nodes in the model")
+    PyPlot.yscale("log")
+    PyPlot.legend(approaches)
 
-    p3 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [time_means[3,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-#    ribbon=[time_var[3,i] for i in 1:(max_clusters*max_nodes_per_cluster)],
-    #ylims = (0,time_max), 
-    yaxis=:log, label = ["simple"])
-
-    p4 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [time_means[4,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-#    ribbon=[log(time_var[4,i]) for i in 1:(max_clusters*max_nodes_per_cluster)],
-    #ylims = (0,time_max), 
-    yaxis=:log, label = ["no link failure"])
-        
-    plt.plot(p1, p2, p3, p4,layout =(2,2))
-    if save
-        plt.savefig(pwd()*"\\fig\\time"*string(eval_reliabilities[1])*".png")
-    end
-    #subplot for the reliability mean and variance
-
-    rel_max = maximum([rel_means[a,i] + rel_var[a,i]/10 for a in 1:length(approaches) 
-                        for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)])
-    p1 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[1,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[1,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
-    ylims = (0,rel_max), label = ["exact"])
-
-    p2 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[2,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[2,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    ylims = (0,rel_max), label = ["heuristic"])
-
-    p3 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[3,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[3,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
-    ylims = (0,rel_max), label = ["simple"])
-
-    p4 = plt.plot([i for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)], 
-    [rel_means[4,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],  
-    ribbon=[rel_var[4,i] for i in (min_clusters*min_nodes_per_cluster):(max_clusters*max_nodes_per_cluster)],
-    ylims = (0,rel_max), label = ["no link failure"])
-
-    plt.plot(p1, p2, p3, p4,layout =(2,2))
-    if save
-        plt.savefig(pwd()*"\\fig\\reliability"*string(eval_reliabilities[1])*".png")        
-    end
-
+    #reliability plot
+    PyPlot.subplot(122)
+    PyPlot.grid("on")
+    PyPlot.legend(loc="upper right")
+    plot_with_variance(plot_values, rel_means[1,:],rel_var[1,:] ,"lightcoral", "r")
+    plot_with_variance(plot_values, rel_means[2,:],rel_var[2,:] ,"cornsilk", "y")
+    plot_with_variance(plot_values, rel_means[3,:],rel_var[3,:] ,"aqua", "b")
+    plot_with_variance(plot_values, rel_means[4,:],rel_var[4,:] ,"lightgray", "k")
+    PyPlot.title("Reliability")
+    PyPlot.ylabel("time in ms")
+    PyPlot.xlabel("number of nodes in the model")
+    PyPlot.legend(approaches)
+    fig.canvas.draw()
+    PyPlot.savefig(pwd()*"\\fig\\eval"*string(eval_reliabilities[1])*".png")
     #save the values as a csv file
     frame = DataFrames
 
@@ -181,6 +152,14 @@ function make_evaluation()
     CSV.write(pwd()*"\\eval\\results"*string(eval_reliabilities[1])*".csv", t_save, delim=';')      
 end
 
+#small function to plot the values with its variance 
+function plot_with_variance(plot_values, means, var, var_color, plot_color)
+    sigmapos = [means[i]+var[i] for i in plot_values]
+    sigmaneg = [means[i]-var[i] for i in plot_values]
+    PyPlot.fill_between(plot_values, sigmapos, sigmaneg, color=var_color)
+    PyPlot.plot(plot_values, [means[i] for i in plot_values], plot_color*"-")
+
+end
 
 #do the evaluation
 make_evaluation()

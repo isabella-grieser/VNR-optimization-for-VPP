@@ -31,8 +31,6 @@ fig, (ax1, ax2) = plt.subplots(1, 2)
 
 x_labels = [l[0] for l in sun_data if l[0].endswith('00')]
 x = [l[0] for l in sun_data]
-print(x_labels)
-print(np.arange(0.0, 1.0, 1.0/len(x_labels)))
 # plot every 30 min
 plt.setp((ax1, ax2), xticks=range(11, len(sun_data), 24))
 
