@@ -28,7 +28,7 @@ with the given node and cluster amount; the individual cluster sizes can also be
 """
 function generate_network(clusters = 5, node_cluster = 5; size_array = [], 
   radius_1 = 20, radius_2 = 5, power_avg = [80], power_sd = [10], der_distribution = [(solar, 1.0)], 
-  sd_avg = 20.0, sd_sd = 1.0, reliability_avg_com = .97, reliability_sd_com = .05)
+  sd_avg = 10.0, sd_sd = 5.0, reliability_avg_com = .9, reliability_sd_com = .1)
 
   elec_edges = ElecEdge[]
   com_edges = ComEdge[]

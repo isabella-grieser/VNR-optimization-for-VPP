@@ -21,11 +21,13 @@ used_time = 15
 #the price used for our example
 unit_price = .3
 
+extra_name = "high_reliability"
 save = true
 
 #scale of the power output
 eval_reliabilities = [0.4, 0.5, 0.6]
-power_scale = .35
+power_scale = .2
+rl = .95
 
 """calculates the evaluation based on the global parameters defined in this file"""
 function make_evaluation()
@@ -46,16 +48,20 @@ function make_evaluation()
                     first_iter = 0
                     #I saw when evaluating that the first calculation really skews the time measurement
                     # -> ignore the first calculations
-                    while r === nothing || r < 0 || (first_iter < 5 && c == 1 && n == 1 && index == 1 && i == 1) 
+                    while r === nothing || r < 0 || (first_iter < 2 && c == min_clusters && n == min_nodes_per_cluster) 
                         tick = time()              
-                        r, tock = dynamic_model_analysis(.95, model = used_model, times = used_time, type = a, 
+                        r, tock = dynamic_model_analysis(rl, model = used_model, times = used_time, type = a, 
                         lambda = unit_price, update = true, calculate_reliability = true,  vnr_value = true,
                         reliabilities = eval_reliabilities, power_scale = power_scale)                     
                         #if an embedding cannot be found -> generate a new model where an embedding hopefully can be found
                         print("size:"*string(c*n)*"; ")
                         first_iter += 1 
-                        #tock = time()-tick         
-                    end
+                        #tock = time()-tick   
+                        if r === nothing || r < 0
+                            print("try again; ")
+                            used_model = generate_network(c, n)
+                        end      
+                    end                 
                     times[index, i, c*n] = tock
                     rel[index, i, c*n] = r
                 end
@@ -112,12 +118,12 @@ function make_evaluation()
     PyPlot.subplot(121)
     PyPlot.grid("on")
     PyPlot.legend(loc="upper right")
-    plot_with_variance(plot_values, time_means[1,:],time_var[1,:] ,"lightcoral", "r")
-    plot_with_variance(plot_values, time_means[2,:],time_var[2,:] ,"cornsilk", "y")
-    plot_with_variance(plot_values, time_means[3,:],time_var[3,:] ,"aqua", "b")
-    plot_with_variance(plot_values, time_means[4,:],time_var[4,:] ,"lightgray", "k")
+    plot_with_variance(plot_values, time_means[1,:],time_var[1,:] ,"lightcoral", "r", true)
+    plot_with_variance(plot_values, time_means[2,:],time_var[2,:] ,"cornsilk", "y", true)
+    plot_with_variance(plot_values, time_means[3,:],time_var[3,:] ,"aqua", "b", true)
+    plot_with_variance(plot_values, time_means[4,:],time_var[4,:] ,"lightgray", "k", true)
     PyPlot.title("Time")
-    PyPlot.ylabel("time in ms")
+    PyPlot.ylabel("solving time in ms")
     PyPlot.xlabel("number of nodes in the model")
     PyPlot.yscale("log")
     PyPlot.legend(approaches)
@@ -126,16 +132,25 @@ function make_evaluation()
     PyPlot.subplot(122)
     PyPlot.grid("on")
     PyPlot.legend(loc="upper right")
-    plot_with_variance(plot_values, rel_means[1,:],rel_var[1,:] ,"lightcoral", "r")
-    plot_with_variance(plot_values, rel_means[2,:],rel_var[2,:] ,"cornsilk", "y")
-    plot_with_variance(plot_values, rel_means[3,:],rel_var[3,:] ,"aqua", "b")
-    plot_with_variance(plot_values, rel_means[4,:],rel_var[4,:] ,"lightgray", "k")
+    plot_with_variance(plot_values, rel_means[1,:],rel_var[1,:] ,"lightcoral", "r", false)
+    plot_with_variance(plot_values, rel_means[2,:],rel_var[2,:] ,"cornsilk", "y", false)
+    plot_with_variance(plot_values, rel_means[3,:],rel_var[3,:] ,"aqua", "b", false)
+    plot_with_variance(plot_values, rel_means[4,:],rel_var[4,:] ,"lightgray", "k", false)
+    #plot to generate a constant for reliability
+    plot_with_variance(plot_values,[rl for i in rel_means[4,:]],[0 for i in rel_means[4,:]],"purple", "m", true)
     PyPlot.title("Reliability")
-    PyPlot.ylabel("time in ms")
+    PyPlot.ylabel("reliability")
     PyPlot.xlabel("number of nodes in the model")
-    PyPlot.legend(approaches)
+    legs = []
+
+    for a in approaches
+    push!(legs, a)        
+    end
+
+    push!(legs, "r_vpp")
+    PyPlot.legend(legs)
     fig.canvas.draw()
-    PyPlot.savefig(pwd()*"\\fig\\eval"*string(eval_reliabilities[1])*".png")
+    PyPlot.savefig(pwd()*"\\fig\\eval"*string(eval_reliabilities[1])*extra_name*".png")
     #save the values as a csv file
     frame = DataFrames
 
@@ -149,14 +164,17 @@ function make_evaluation()
                     for i in 1:(max_clusters*max_nodes_per_cluster)],
         RelVar =  [rel_var[a,i] for a in 1:length(approaches) 
                     for i in 1:(max_clusters*max_nodes_per_cluster)])
-    CSV.write(pwd()*"\\eval\\results"*string(eval_reliabilities[1])*".csv", t_save, delim=';')      
+    CSV.write(pwd()*"\\eval\\results"*string(eval_reliabilities[1])*extra_name*".csv", t_save, delim=';')      
 end
 
 #small function to plot the values with its variance 
-function plot_with_variance(plot_values, means, var, var_color, plot_color)
+function plot_with_variance(plot_values, means, var, var_color, plot_color, islog)
     sigmapos = [means[i]+var[i] for i in plot_values]
-    sigmaneg = [means[i]-var[i] for i in plot_values]
-    PyPlot.fill_between(plot_values, sigmapos, sigmaneg, color=var_color)
+    sigmaneg = [(means[i]-var[i] > 0) ? means[i]-var[i] : 0 for i in plot_values]
+    if !islog
+        #I dont understand but the log things are not working again :(
+        PyPlot.fill_between(plot_values, sigmapos, sigmaneg, color=var_color)
+    end
     PyPlot.plot(plot_values, [means[i] for i in plot_values], plot_color*"-")
 
 end

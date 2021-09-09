@@ -106,26 +106,28 @@ end
   
   creates and returns all scenarios and its probabilities minus the scerarios that need to be fulfilled anyway
 """
-function create_minimum_scenarios(nodes, com_edges, reliabilities, vnr_reliability)
+function create_minimum_scenarios(nodes, com_edges, reliabilities, vnr_reliability; scenarios = nothing)
 
   rel = 1 - vnr_reliability
   #calculate the cartesian product
   #there should be a more efficient way to calculate all this (because we only need parts of it)
   #but I dont know how to calculate an n-cartesian efficently given the heuristic constraints
-  all_scenarios = create_scenarios(nodes, reliabilities)
-
+  if scenarios === nothing
+    all_scenarios = create_scenarios(nodes, reliabilities)
+  end
   #calculate the lowest com_edge factor of the network 
   sum_pi = sum(all_scenarios[i][1]*(1-com_edges[l].reliability)
         for i in 1:length(all_scenarios) for l in 1:length(com_edges))
   sum_pi += sum((s)->s[1],all_scenarios)
-  min_com_factor = minimum((e)-> (1/sum_pi)*(1-e.reliability), com_edges)  
+  min_com_factor = minimum([(1-e.reliability) for e in com_edges if e.reliability < 1.0]) 
+  min_com_factor *= (1/sum_pi) 
   #this implementation of removing unecessary scenarios is kind of inefficient I guess
   #sort the list by scenario probabilities
   sort!(all_scenarios, by=x->x[1])
   all_essential_scenarios = []
   #the current scenario probability
   current_probability = 0
-  #this only says if the cumulative probability is higher than the allowed probability
+  #this only says if the probability is higher than the allowed probability
   next_is_last = false
   for i in 1:length(all_scenarios)
     probability = all_scenarios[i][1]
@@ -135,7 +137,7 @@ function create_minimum_scenarios(nodes, com_edges, reliabilities, vnr_reliabili
       continue
     elseif next_is_last == true
       #if this is the last scenario with a probability that is interesting for us 
-      if current_probability == probability
+      if current_probability == (min_com_factor*probability)
         #we want to get all scenarios with the same probability
         push!(all_essential_scenarios, all_scenarios[i])
         continue
@@ -144,11 +146,11 @@ function create_minimum_scenarios(nodes, com_edges, reliabilities, vnr_reliabili
         break
       end
     else 
-      if min_com_factor*probability > rel
-        #else we put the flag that we only want the next elements and then stop
+      if (min_com_factor*probability) > rel
+        #else we put the flag that we only want the next elements (defined in the current_probability) and then stop
         next_is_last = true
+      current_probability = probability        
       end
-      current_probability = probability
       push!(all_essential_scenarios, all_scenarios[i])
     end
   end

@@ -74,14 +74,15 @@ c = network.com_edges
             y[l] >= -y_float[uv,c[l].to.id,c[l].from.id])
 
 
-#scenario values; is an array of tuples(that define the power outputs in a specific scenario and the probability of the scenario)
-if isempty(scenario_outputs)  
-    scenario_outputs = create_scenarios(network.nodes, reliabilities)
-end
+
 
 #now begin the scenario constraints 
 
 if type == "exact"
+#scenario values; is an array of tuples(that define the power outputs in a specific scenario and the probability of the scenario)
+if isempty(scenario_outputs)  
+    scenario_outputs = create_scenarios(network.nodes, reliabilities)
+end
 
 #scenario variables 
 @variable(model,zeta[1:length(scenario_outputs), 1:(length(network.com_edges)+1)], binary = true)
@@ -97,9 +98,10 @@ if type == "exact"
 
 #probability variables
 #use the sum of all probabilities, not of the reduced size of probabilities
-sum_pi = sum(scenario_outputs[i][1]*(1-network.com_edges[l].reliability)
-        for i in 1:length(scenario_outputs) for l in 1:length(network.com_edges))
-sum_pi += sum((s)->s[1], scenario_outputs)
+all_scenarios = create_scenarios(network.nodes, reliabilities)
+sum_pi = sum(all_scenarios[i][1]*(1-network.com_edges[l].reliability)
+        for i in 1:length(all_scenarios) for l in 1:length(network.com_edges))
+sum_pi += sum((s)->s[1], all_scenarios)
 
 #scenario node constraint; go over all scenarios and check if the power constraint is solved 
 @constraint(model, c16, (1/sum_pi)*(sum(zeta[i, l]*scenario_outputs[i][1]*(1-network.com_edges[l].reliability)
@@ -115,7 +117,8 @@ elseif type == "heuristic"
 @variable(model,zeta_link[1:length(network.com_edges)], binary = true)
 
 #normalization factor again
-sum_pi = sum((s)->s[1], scenario_outputs)
+all_scenarios = create_scenarios(network.nodes, reliabilities)
+sum_pi = sum((s)->s[1], all_scenarios)
 #then, add the new constraints
 #node constraints
 @constraint(model, c14[i = 1:length(scenario_outputs)], zeta[i]*vnr.power 
@@ -125,10 +128,11 @@ sum_pi = sum((s)->s[1], scenario_outputs)
                     <= 1.0-vnr.reliability)
 
 #link constraints
+sum_link = sum((l)->(1-l.reliability), network.com_edges)
 @constraint(model, c16[l = 1:length(network.com_edges)], zeta_link[l]*vnr.power
         + sum(x[2,n]*network.nodes[n].power*epsilon[l, n] for n in 1:length(network.nodes)) >= vnr.power)
 
-@constraint(model, c17, sum(zeta_link[l]*network.com_edges[l].reliability
+@constraint(model, c17, (1/sum_link)*sum(zeta_link[l]*(1-network.com_edges[l].reliability)
                             for l in 1:length(network.com_edges)) <= 1.0-vnr.reliability)
 elseif type == "simple"
 @variable(model,epsilon[1:(length(network.com_edges)+1), 1:length(network.nodes)], binary = true)
@@ -140,7 +144,8 @@ elseif type == "simple"
 @constraint(model, c15[l = 1:length(network.com_edges)], zeta_link[l]*vnr.power
         + sum(x[2,n]*network.nodes[n].power*epsilon[l, n] for n in 1:length(network.nodes)) >= vnr.power)
 
-@constraint(model, c16, sum(zeta_link[l]*network.com_edges[l].reliability
+sum_link = sum((l)->(1-l.reliability), network.com_edges)
+@constraint(model, c16, (1/sum_link)*sum(zeta_link[l]*(1-network.com_edges[l].reliability)
                             for l in 1:length(network.com_edges)) <= 1.0-vnr.reliability)
 elseif type == "no_link_failure"
 #node constraints
